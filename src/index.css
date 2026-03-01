@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', 'Noto Sans', sans-serif;
+  background: #08080f;
+  color: #e2e8f0;
+  overflow-x: hidden;
+}
+
+.odometer-digit {
+  overflow: hidden;
+  position: relative;
+}
+
+.odometer-strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+
+.odometer-strip.style-default {
+  transition-timing-function: cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.odometer-strip.style-bounce {
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.odometer-strip.style-machine {
+  transition-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.18);
+  outline: none;
+  width: 100%;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(233,69,96,0.4);
+}
+
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 2px solid rgba(255,255,255,0.15);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+.glass-panel {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #e94560, #c23152);
+  color: white;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: rgba(255,255,255,0.08);
+  color: #e2e8f0;
+  font-weight: 500;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.14);
+}
+
+.input-field {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+
+.input-field:focus {
+  border-color: #e94560;
+  background: rgba(255,255,255,0.12);
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 8px;
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.recording-pulse {
+  animation: pulse-recording 1s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Hide scrollbar for mobile tab bar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area for notched phones */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 10px);
+}
+
+/* Sliders that only move when thumb is touched */
+.thumb-only-slider {
+  pointer-events: none;
+}
+.thumb-only-slider::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.thumb-only-slider::-moz-range-thumb {
+  pointer-events: auto;
+}
+
+/* Larger tap targets on mobile */
+@media (max-width: 640px) {
+  .input-field {
+    padding: 10px 12px;
+    font-size: 16px; /* prevent iOS zoom */
+  }
+  .btn-primary, .btn-secondary {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  input[type="range"] {
+    height: 8px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  input[type="color"] {
+    width: 40px;
+    height: 40px;
+  }
+}
