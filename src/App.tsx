@@ -5,7 +5,7 @@ import { translations, LANG_NAMES, type Language } from './i18n';
 /* ─── Types ─── */
 interface TextOverlay { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontFamily: string; }
 interface EmojiOverlay { id: string; emoji: string; x: number; y: number; size: number; }
-interface StickerData { id: string; url: string; x: number; y: number; size: number; rotation: number; borderWidth: number; borderColor: string; img?: HTMLImageElement; }
+interface StickerData { id: string; url: string; x: number; y: number; size: number; rotation: number; borderWidth: number; borderColor: string; aspectRatio: number; img?: HTMLImageElement; }
 
 /* ─── Constants ─── */
 const FONTS = ['Orbitron','Bebas Neue','Russo One','Poppins'];
@@ -115,12 +115,19 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   cfg.emojiOverlays.forEach(ov=>{ ctx.font=`${ov.size*scale}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ov.emoji,(ov.x/100)*w,(ov.y/100)*h); });
   cfg.stickerData.forEach(st=>{
     if(!st.img) return;
-    const sz=st.size*scale; const sx=(st.x/100)*w; const sy=(st.y/100)*h;
+    const sizeBase = st.size * scale;
+    const finalW = st.aspectRatio >= 1 ? sizeBase : sizeBase * st.aspectRatio;
+    const finalH = st.aspectRatio >= 1 ? sizeBase / st.aspectRatio : sizeBase;
+    const sx=(st.x/100)*w; const sy=(st.y/100)*h;
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate((st.rotation * Math.PI) / 180);
-    if(st.borderWidth>0){ ctx.strokeStyle=st.borderColor; ctx.lineWidth=st.borderWidth*scale; ctx.strokeRect(-sz/2-st.borderWidth*scale/2, -sz/2-st.borderWidth*scale/2, sz+st.borderWidth*scale, sz+st.borderWidth*scale); }
-    ctx.drawImage(st.img,-sz/2,-sz/2,sz,sz);
+    if(st.borderWidth>0){
+      ctx.strokeStyle=st.borderColor;
+      ctx.lineWidth=st.borderWidth*scale;
+      ctx.strokeRect(-finalW/2, -finalH/2, finalW, finalH);
+    }
+    ctx.drawImage(st.img,-finalW/2,-finalH/2,finalW,finalH);
     ctx.restore();
   });
 }
@@ -200,11 +207,12 @@ export function App(){
       else if(sel.startsWith('sticker-')) { id=sel.replace('sticker-',''); const f=stickersRef.current.find(s=>s.id===id); if(f){ox=f.x;oy=f.y;os=f.size;or=f.rotation;} type='sticker'; }
 
       interactionRef.current = {
-        active: true, mode: (touches && touches.length === 2) ? 'pinch' : 'drag',
+        active: true, 
+        mode: (touches && touches.length >= 2) ? 'pinch' : 'drag',
         startX: clientX, startY: clientY,
         origX: ox, origY: oy, origSize: os, origRotation: or,
-        initialDist: (touches && touches.length === 2) ? getDist(touches[0], touches[1]) : 0,
-        initialAngle: (touches && touches.length === 2) ? getAngle(touches[0], touches[1]) : 0,
+        initialDist: (touches && touches.length >= 2) ? getDist(touches[0], touches[1]) : 0,
+        initialAngle: (touches && touches.length >= 2) ? getAngle(touches[0], touches[1]) : 0,
         type, id
       };
     };
@@ -214,7 +222,7 @@ export function App(){
       if(!ir.active) return;
       const rect = el.getBoundingClientRect();
 
-      if(touches && touches.length === 2 && ir.mode === 'pinch') {
+      if(touches && touches.length >= 2 && ir.mode === 'pinch') {
         const dist = getDist(touches[0], touches[1]);
         const angle = getAngle(touches[0], touches[1]);
         const scale = dist / ir.initialDist;
@@ -241,17 +249,43 @@ export function App(){
 
     const handlePointerDown = (e: PointerEvent) => {
       if(e.pointerType === 'touch' && !e.isPrimary) return;
-      if(e.target !== el && !(e.target as HTMLElement).closest('.draggable-item')) return;
-      e.preventDefault(); // Prevent default browser actions (e.g., scrolling, text selection)
-      startInteraction(e.clientX, e.clientY);
+      const target = e.target as HTMLElement;
+      const item = target.closest('.draggable-item');
+      
+      // Escape focus from inputs when touching or dragging in the preview
+      if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+      }
+
+      if (item) {
+        e.preventDefault();
+        const id = item.getAttribute('data-id');
+        const type = item.getAttribute('data-type');
+        const sel = type === 'record' ? 'record' : `${type}-${id}`;
+        if (selectedElementRef.current !== sel) {
+          setSelectedElement(sel);
+        }
+        startInteraction(e.clientX, e.clientY);
+      } else if (target === el) {
+        if (selectedElementRef.current) {
+            e.preventDefault();
+            startInteraction(e.clientX, e.clientY);
+        }
+      }
     };
+
     const handlePointerMove = (e: PointerEvent) => { if(e.pointerType === 'mouse') moveInteraction(e.clientX, e.clientY); };
     const handlePointerUp = () => { interactionRef.current.active = false; };
-    const handleTouchStart = (e: TouchEvent) => { if(e.touches.length === 2) startInteraction(e.touches[0].clientX, e.touches[0].clientY, e.touches); };
+    const handleTouchStart = (e: TouchEvent) => {
+        if (e.touches.length >= 2) {
+            e.preventDefault();
+            startInteraction(e.touches[0].clientX, e.touches[0].clientY, e.touches);
+        }
+    };
     const handleTouchMove = (e: TouchEvent) => {
       if(interactionRef.current.active) e.preventDefault();
       if(e.touches.length === 1) moveInteraction(e.touches[0].clientX, e.touches[0].clientY);
-      else if(e.touches.length === 2) moveInteraction(0, 0, e.touches);
+      else if(e.touches.length >= 2) moveInteraction(0, 0, e.touches);
     };
 
     el.addEventListener('pointerdown', handlePointerDown);
@@ -327,10 +361,21 @@ export function App(){
 
     if(soundEnabled){
       try{
-        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
         await audioCtx.resume();
         audioDest = audioCtx.createMediaStreamDestination();
-        // Samsung Gallery fix: ensure there's an actual audio track being recorded
+        
+        // Add low-level white noise to force mobile players to recognize the audio track
+        const bufferSize = audioCtx.sampleRate * 1;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) { data[i] = (Math.random() * 2 - 1) * 0.0001; }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+        noise.connect(audioDest);
+        noise.start();
+
         if (audioDest.stream.getAudioTracks().length > 0) {
           finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
         }
@@ -338,10 +383,9 @@ export function App(){
       }catch(e){ console.warn('Audio capture failed:',e);}
     }
 
-    // Prioritize MP4 for Samsung if available, then WebM
     const preferredTypes = isSamsungBrowser
-      ? ['video/mp4;codecs=h264,aac', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-      : ['video/mp4;codecs=h264,aac', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+      ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
+      : ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
     const mimeType = preferredTypes.find(t2 => (window as any).MediaRecorder && MediaRecorder.isTypeSupported(t2)) || 'video/webm';
     
     const recorder=new MediaRecorder(finalStream,{mimeType,videoBitsPerSecond:50_000_000, audioBitsPerSecond:192_000}); const chunks:Blob[]=[];
@@ -349,9 +393,12 @@ export function App(){
     recorder.onstop=async()=>{
       const containerType = mimeType.split(';')[0];
       const blob=new Blob(chunks,{type:containerType});
+
+      // If it's a real MP4 or Samsung Internet, just use the blob. 
+      // Samsung Internet sometimes struggles with high bitrates or complex WebM in its native gallery.
       const url = URL.createObjectURL(blob); 
       setVideoUrl(url); 
-      setVideoMimeType(containerType); // Set the mime type here
+      setVideoMimeType(containerType);
       setIsRecording(false);
       if(audioCtx&&audioCtx.state!=='closed'){ audioCtx.close(); }
     };
@@ -365,7 +412,6 @@ export function App(){
       setIsAnimating(true); if(animEnabled){ setTimeout(()=>setShowValues(true),ANIM_DELAY); } else { setShowValues(true); }
       if(soundEnabled && audioCtx && audioDest){
         setTimeout(()=>{
-          // Record sound into the stream by passing audioDest as one of the destinations
           playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
         },ANIM_DELAY);
       }
@@ -437,18 +483,26 @@ export function App(){
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={()=>mediaInputRef.current?.click()}>📁 {t('uploadMedia')}</button>
           {bgMediaUrl&&(<div className="space-y-2 mt-2"><button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button></div>)}
           <div className="border-t border-white/10 pt-3 mt-3"><label className="text-xs font-medium text-white/60 mb-2 block">🖼️ {language==='ko'?'스티커 이미지 (최대 1장)':'Sticker Image (max 1)'}</label>
-          <input ref={stickerInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{ const file=e.target.files?.[0]; if(!file||stickers.length>=1)return; const url=URL.createObjectURL(file); setStickers(p=>[...p,{id:uid(),url,x:50,y:50,size:80,rotation:0,borderWidth:0,borderColor:'#ffffff'}]); if(stickerInputRef.current)stickerInputRef.current.value=''; }}/>
+          <input ref={stickerInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{
+            const file=e.target.files?.[0]; if(!file||stickers.length>=1)return;
+            const url=URL.createObjectURL(file);
+            const img=new Image(); img.src=url;
+            img.onload=()=>{
+                setStickers([{id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height}]);
+                if(stickerInputRef.current)stickerInputRef.current.value='';
+            };
+          }}/>
           {stickers.length<1&&(<button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95 mb-2" onClick={()=>stickerInputRef.current?.click()}>📎 {language==='ko'?'스티커 추가':'Add Sticker'}</button>)}
-          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'크기':'Size'}</span><ClampedNumberInput value={st.size} min={20} max={500} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,size:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리':'Border'}</span><ClampedNumberInput value={st.borderWidth} min={0} max={10} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers([])}>✕</button></div></div>))}</div>
+          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'크기':'Size'}</span><ClampedNumberInput value={st.size} min={20} max={500} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,size:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리':'Border'}</span><ClampedNumberInput value={st.borderWidth} min={1} max={3} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers([])}>✕</button></div></div>))}</div>
         </Section>
         <Section title={t('sectionExport')} defaultOpen={true}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="0.5" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
       </aside>
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
-          <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onPointerDown={(e)=>{ if(e.target===e.currentTarget) setSelectedElement(null); }} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+          <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
             {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video src={bgMediaUrl} style={mediaStyle} autoPlay muted loop playsInline/>)}</div>); })()}
             
-            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing`} style={{left:`${recordX}%`,top:`${recordY}%`,transform:'translate(-50%, -50%)',outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none'}} onPointerDown={(e)=>{ e.stopPropagation(); setSelectedElement('record'); }}>
+            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,transform:'translate(-50%, -50%)',outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none'}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-semibold tracking-widest uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.3*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging}/></div>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-semibold tracking-widest uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.3*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
@@ -456,9 +510,9 @@ export function App(){
               </div>
             </div>
 
-            {textOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:selectedElement===`text-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}} onPointerDown={(e)=>{ e.stopPropagation(); setSelectedElement(`text-${ov.id}`); }}>{ov.text}</div>))}
-            {emojiOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',fontSize:ov.size,outline:selectedElement===`emoji-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}} onPointerDown={(e)=>{ e.stopPropagation(); setSelectedElement(`emoji-${ov.id}`); }}>{ov.emoji}</div>))}
-            {stickers.map(st=>(<div key={st.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" style={{left:`${st.x}%`,top:`${st.y}%`,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}} onPointerDown={(e)=>{ e.stopPropagation(); setSelectedElement(`sticker-${st.id}`); }}><img src={st.url} alt="" style={{width:st.size,height:st.size,objectFit:'contain',border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none',borderRadius:st.borderWidth>0?'4px':'0',pointerEvents:'none'}}/></div>))}
+            {textOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="text" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:selectedElement===`text-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.text}</div>))}
+            {emojiOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="emoji" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',fontSize:ov.size,outline:selectedElement===`emoji-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.emoji}</div>))}
+            {stickers.map(st=>(<div key={st.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0" data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>))}
 
             {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40"><button className="bg-red-500/80 hover:bg-red-500 text-white text-[10px] px-2 py-1 rounded" onClick={deleteSelected}>🗑 {language==='ko'?'삭제':'Delete'}</button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
@@ -478,7 +532,7 @@ export function App(){
         </div>
         {videoUrl && (
           <p className="text-[10px] text-white/40 text-center mt-1.5">
-            ※ {language==='ko' ? `모바일 다운로드 시 ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? '고화질 WebM으로 저장됩니다. ' : ''}크롬 브라우저 사용을 권장합니다.` : `For mobile downloads, ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? 'a high-quality WebM will be saved. ' : ''}using Chrome browser is recommended.`}
+            ※ {language==='ko' ? `모바일 다운로드 시 ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? '고화질 WebM으로 저장될 수 있습니다. ' : ''}크롬 브라우저 사용을 권장합니다.` : `For mobile downloads, ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? 'a high-quality WebM may be saved. ' : ''}using Chrome browser is recommended.`}
           </p>
         )}
         {videoUrl&&(<div className="glass-panel p-3 fade-in"><video src={videoUrl} controls className="w-full max-w-md mx-auto rounded-lg" style={{maxHeight:'300px'}}/></div>)}
