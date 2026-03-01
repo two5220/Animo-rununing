@@ -119,7 +119,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate((st.rotation * Math.PI) / 180);
-    if(st.borderWidth>0){ ctx.strokeStyle=st.borderColor; ctx.lineWidth=st.borderWidth*scale; ctx.strokeRect(-sz/2-st.borderWidth*scale/2,-sz/2-st.borderWidth*scale/2,sz+st.borderWidth*scale,sz+st.borderWidth*scale); }
+    if(st.borderWidth>0){ ctx.strokeStyle=st.borderColor; ctx.lineWidth=st.borderWidth*scale; ctx.strokeRect(-sz/2-st.borderWidth*scale/2, -sz/2-st.borderWidth*scale/2, sz+st.borderWidth*scale, sz+st.borderWidth*scale); }
     ctx.drawImage(st.img,-sz/2,-sz/2,sz,sz);
     ctx.restore();
   });
@@ -156,7 +156,7 @@ export function App(){
   const recAudioCtxRef=useRef<AudioContext|null>(null);
   const [textOverlays,setTextOverlays]=useState<TextOverlay[]>([]); const [emojiOverlays,setEmojiOverlays]=useState<EmojiOverlay[]>([]);
   const [bgMediaUrl,setBgMediaUrl]=useState<string|null>(null); const [bgMediaType,setBgMediaType]=useState<'image'|'video'>('image'); const [bgMediaScale,setBgMediaScale]=useState(100); const [bgMediaX,setBgMediaX]=useState(50); const [bgMediaY,setBgMediaY]=useState(50);
-  const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null);
+  const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null); const [videoMimeType,setVideoMimeType]=useState<string|null>(null);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
   const [activeTab,setActiveTab]=useState(0); const [selectedElement,setSelectedElement]=useState<string|null>(null);
   const [isResizing,setIsResizing]=useState(false); const resizeTimerRef=useRef<ReturnType<typeof setTimeout>|null>(null); const markResizing=useCallback(()=>{ setIsResizing(true); if(resizeTimerRef.current)clearTimeout(resizeTimerRef.current); resizeTimerRef.current=setTimeout(()=>setIsResizing(false),150); },[]);
@@ -242,6 +242,7 @@ export function App(){
     const handlePointerDown = (e: PointerEvent) => {
       if(e.pointerType === 'touch' && !e.isPrimary) return;
       if(e.target !== el && !(e.target as HTMLElement).closest('.draggable-item')) return;
+      e.preventDefault(); // Prevent default browser actions (e.g., scrolling, text selection)
       startInteraction(e.clientX, e.clientY);
     };
     const handlePointerMove = (e: PointerEvent) => { if(e.pointerType === 'mouse') moveInteraction(e.clientX, e.clientY); };
@@ -330,21 +331,28 @@ export function App(){
         await audioCtx.resume();
         audioDest = audioCtx.createMediaStreamDestination();
         // Samsung Gallery fix: ensure there's an actual audio track being recorded
-        finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
+        if (audioDest.stream.getAudioTracks().length > 0) {
+          finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
+        }
         recAudioCtxRef.current = audioCtx;
       }catch(e){ console.warn('Audio capture failed:',e);}
     }
 
+    // Prioritize MP4 for Samsung if available, then WebM
     const preferredTypes = isSamsungBrowser
-      ? ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']
-      : ['video/mp4;codecs=h264,aac','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+      ? ['video/mp4;codecs=h264,aac', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['video/mp4;codecs=h264,aac', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
     const mimeType = preferredTypes.find(t2 => (window as any).MediaRecorder && MediaRecorder.isTypeSupported(t2)) || 'video/webm';
+    
     const recorder=new MediaRecorder(finalStream,{mimeType,videoBitsPerSecond:50_000_000, audioBitsPerSecond:192_000}); const chunks:Blob[]=[];
     recorder.ondataavailable=(e)=>{ if(e.data.size>0)chunks.push(e.data); };
     recorder.onstop=async()=>{
       const containerType = mimeType.split(';')[0];
       const blob=new Blob(chunks,{type:containerType});
-      const url = URL.createObjectURL(blob); setVideoUrl(url); setIsRecording(false);
+      const url = URL.createObjectURL(blob); 
+      setVideoUrl(url); 
+      setVideoMimeType(containerType); // Set the mime type here
+      setIsRecording(false);
       if(audioCtx&&audioCtx.state!=='closed'){ audioCtx.close(); }
     };
 
@@ -456,7 +464,23 @@ export function App(){
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2.5 max-w-md mx-auto"><button className="w-full h-12 rounded-xl font-bold text-sm bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording}>{t('play')}</button><button className="w-full h-12 rounded-xl font-bold text-sm bg-white/15 text-white border border-white/30 active:scale-95 disabled:opacity-40" onClick={resetAnimation} disabled={isRecording}>{t('reset')}</button><button className="w-full h-12 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-40" onClick={startRecording} disabled={isRecording} style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}>{isRecording?t('recording'):t('record')}</button>{videoUrl?(<a href={videoUrl} download={isSamsungBrowser?'runviz-record.webm':'runviz-record.mp4'} className="w-full h-12 flex items-center justify-center rounded-xl font-bold text-sm bg-[#059669] text-white active:scale-95 no-underline">💾 {t('download')}</a>):(<div className="w-full h-12"/>)}</div>
+        <div className="grid grid-cols-2 gap-2.5 max-w-md mx-auto">
+          <button className="w-full h-12 rounded-xl font-bold text-sm bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording}>{t('play')}</button>
+          <button className="w-full h-12 rounded-xl font-bold text-sm bg-white/15 text-white border border-white/30 active:scale-95 disabled:opacity-40" onClick={resetAnimation} disabled={isRecording}>{t('reset')}</button>
+          <button className="w-full h-12 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-40" onClick={startRecording} disabled={isRecording} style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}>{isRecording?t('recording'):t('record')}</button>
+          <a 
+            href={videoUrl || '#'} 
+            download={videoUrl ? `runviz-record.${videoMimeType === 'video/mp4' ? 'mp4' : 'webm'}` : undefined}
+            className={`w-full h-12 flex items-center justify-center rounded-xl font-bold text-sm bg-[#059669] text-white active:scale-95 no-underline ${!videoUrl ? 'opacity-40 pointer-events-none' : ''}`}
+            onClick={(e) => { if (!videoUrl) e.preventDefault(); }}
+            aria-disabled={!videoUrl}
+          >💾 {t('download')}</a>
+        </div>
+        {videoUrl && (
+          <p className="text-[10px] text-white/40 text-center mt-1.5">
+            ※ {language==='ko' ? `모바일 다운로드 시 ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? '고화질 WebM으로 저장됩니다. ' : ''}크롬 브라우저 사용을 권장합니다.` : `For mobile downloads, ${isSamsungBrowser && videoMimeType !== 'video/mp4' ? 'a high-quality WebM will be saved. ' : ''}using Chrome browser is recommended.`}
+          </p>
+        )}
         {videoUrl&&(<div className="glass-panel p-3 fade-in"><video src={videoUrl} controls className="w-full max-w-md mx-auto rounded-lg" style={{maxHeight:'300px'}}/></div>)}
       </section>
     </main>
