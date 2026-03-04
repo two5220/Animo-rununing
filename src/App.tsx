@@ -14,6 +14,17 @@ const ASPECT_RATIOS: Record<string, { w: number; h: number; label: string }> = {
 const SOUND_TYPES = ['drop','bubble','tick','casual'] as const;
 let CURRENT_SPIN = 3;
 
+const THEMES = [
+  { name: 'Midnight', digit: '#e94560', label: '#a0aec0' },
+  { name: 'Classic', digit: '#ffffff', label: '#94a3b8' },
+  { name: 'Dark', digit: '#111111', label: '#555555' },
+  { name: 'Fluorescent', digit: '#ccff00', label: '#333333' },
+  { name: 'Power Red', digit: '#ff0000', label: '#ffffff' },
+  { name: 'Silver', digit: '#d1d5db', label: '#4b5563' },
+  { name: 'Nature', digit: '#4ade80', label: '#064e3b' },
+  { name: 'Violet', digit: '#c084fc', label: '#4c1d95' },
+];
+
 type TextAlign = 'left' | 'center' | 'right';
 const ANIM_DELAY = 300;
 const DEFAULT_STAGGER = 80;
@@ -255,7 +266,7 @@ function ClampedNumberInput({ value, min, max, step, onChange, className, title 
 /* ─── Main App ─── */
 export function App(){
   const [language,setLanguage]=useState<Language>('ko'); const t=useCallback((k:string)=>translations[language]?.[k]||k,[language]);
-  const [hours,setHours]=useState('0'); const [minutes,setMinutes]=useState('32'); const [seconds,setSeconds]=useState('15'); const [distance,setDistance]=useState('5.21'); const [paceMin,setPaceMin]=useState('6'); const [paceSec,setPaceSec]=useState('12'); const [labelLang,setLabelLang]=useState<'en'|'ko'>('en');
+  const [hours,setHours]=useState('0'); const [minutes,setMinutes]=useState('32'); const [seconds,setSeconds]=useState('15'); const [distance,setDistance]=useState('5.21'); const [paceMin,setPaceMin]=useState('6'); const [paceSec,setPaceSec]=useState('12'); const [labelLang,setLabelLang]=useState<'en'|'ko'>('ko');
   const [showLabels,setShowLabels]=useState(true); const [showUnits,setShowUnits]=useState(true); const [digitColor,setDigitColor]=useState('#e94560'); const [labelColor,setLabelColor]=useState('#a0aec0'); const [metricFontSize,setMetricFontSize]=useState(100); const [labelFontSize,setLabelFontSize]=useState(130); const [metricAlign,setMetricAlign]=useState<TextAlign>('center'); const [selectedFont,setSelectedFont]=useState('Orbitron'); const [layout,setLayout]=useState<'vertical'|'horizontal'>('vertical'); const [spacing,setSpacing]=useState(3); const [labelGapValue,setLabelGapValue]=useState(4); const [recordX,setRecordX]=useState(50); const [recordY,setRecordY]=useState(50);
   const [animStyle,setAnimStyle]=useState<AnimStyle>('machine'); const [animDuration,setAnimDuration]=useState(5000); const [spinCycles,setSpinCycles]=useState(3); useEffect(()=>{ CURRENT_SPIN=spinCycles; },[spinCycles]); const [showValues,setShowValues]=useState(false); const [isAnimating,setIsAnimating]=useState(false); const [animKey,setAnimKey]=useState(0); const [layoutChanging,setLayoutChanging]=useState(false);
   const [soundEnabled,setSoundEnabled]=useState(true); const [soundVolume,setSoundVolume]=useState(0.5); const [soundType,setSoundType]=useState('tick'); const activeAudioCtxRef=useRef<AudioContext|null>(null); const previewAudioCtxRef=useRef<AudioContext|null>(null);
@@ -450,7 +461,7 @@ export function App(){
     if(temp.state==='suspended') temp.resume().catch(()=>{});
     playSound(type,soundVolume,2000,'machine',temp);
     previewAudioCtxRef.current=temp;
-    setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },2300);
+    setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },2000);
   };
 
   const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:s)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
@@ -561,17 +572,76 @@ export function App(){
       <aside className="w-full lg:w-[340px] space-y-2.5 lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto lg:pr-1 order-2 lg:order-1">
         <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide sticky top-0 z-40 bg-[#08080f]/98 backdrop-blur-sm py-2 border-b border-white/8">{tabLabels.map((tab,i)=>(<button key={i} className={`flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap border ${activeTab===i? (i===0?'bg-blue-600 border-blue-500 shadow-blue-500/30':i===1?'bg-purple-600 border-purple-500 shadow-purple-500/30':i===2?'bg-amber-600 border-amber-500 shadow-amber-500/30':i===3?'bg-emerald-600 border-emerald-500 shadow-emerald-500/30':'bg-pink-600 border-pink-500 shadow-pink-500/30') + ' text-white shadow-lg' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'}`} onClick={()=>setActiveTab(i)}><span className="mr-1">{tab.icon}</span>{tab.label}</button>))}</div>
         <div className={`${activeTab===0?'block':'hidden'}`}><Section title={t('sectionData')} defaultOpen={true}>
-          <div className="flex gap-4"><label className="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" checked={showLabels} onChange={(e)=>setShowLabels(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" /><span className="text-xs font-medium text-white/70">{t('showLabels')}</span></label><label className="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" checked={showUnits} onChange={(e)=>setShowUnits(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" /><span className="text-xs font-medium text-white/70">{language==='ko'?'단위 표시':'Show Units'}</span></label></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('duration')}</label><div className="flex gap-2"><div className="flex-1"><input type="number" min="0" max="99" className="input-field text-center" value={hours} onChange={(e)=>setHours(e.target.value)} placeholder={t('hours')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('hours')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={minutes} onChange={(e)=>setMinutes(e.target.value)} placeholder={t('minutes')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('minutes')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={seconds} onChange={(e)=>setSeconds(e.target.value)} placeholder={t('seconds')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('seconds')}</span></div></div></div>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex gap-4 items-center">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" checked={showLabels} onChange={(e)=>setShowLabels(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
+                <span className="text-xs font-medium text-white/70">{t('showLabels')}</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={showUnits} onChange={(e)=>setShowUnits(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
+                  <span className="text-xs font-medium text-white/70">{language==='ko'?'단위 표시':'Show Units'}</span>
+                </label>
+                <button 
+                  disabled={!showUnits}
+                  className={`px-2 py-0.5 rounded text-xs font-bold border transition ${!showUnits ? 'opacity-30 cursor-not-allowed grayscale border-white/10' : 'bg-[#e94560] border-[#e94560] text-white shadow-sm'}`} 
+                  onClick={()=>setLabelLang(prev => prev === 'ko' ? 'en' : 'ko')}
+                >
+                  {labelLang==='ko'?'한글':'영어'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-white/5 pt-2">
+            <label className="text-xs font-medium text-white/60 mb-1 block">{t('duration')}</label>
+            <div className="flex gap-2"><div className="flex-1"><input type="number" min="0" max="99" className="input-field text-center" value={hours} onChange={(e)=>setHours(e.target.value)} placeholder={t('hours')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('hours')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={minutes} onChange={(e)=>setMinutes(e.target.value)} placeholder={t('minutes')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('minutes')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={seconds} onChange={(e)=>setSeconds(e.target.value)} placeholder={t('seconds')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('seconds')}</span></div></div>
+          </div>
           <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setPaceSec(e.target.value)} /></div></div></div>
         </Section></div>
         <div className={`${activeTab===1?'block':'hidden'}`}><Section title={t('sectionStyle')} defaultOpen={true}>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('layout')}</label><div className="flex gap-2"><button className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${layout==='vertical'?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>{ setLayout('vertical'); setLayoutChanging(true); setTimeout(()=>setLayoutChanging(false),200); }}>{t('vertical')}</button><button className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${layout==='horizontal'?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>{ setLayout('horizontal'); setMetricFontSize(70); setSpacing(10); setLayoutChanging(true); setTimeout(()=>setLayoutChanging(false),200); }}>{t('horizontal')}</button></div></div>
+          <div>
+            <label className="text-xs font-medium text-white/60 mb-1 block">{t('layout')} & {t('font')}</label>
+            <div className="flex gap-1.5">
+              <button className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border ${layout==='vertical'?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>{ setLayout('vertical'); setLayoutChanging(true); setTimeout(()=>setLayoutChanging(false),200); }}>{t('vertical')}</button>
+              <button className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border ${layout==='horizontal'?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>{ setLayout('horizontal'); setMetricFontSize(40); setSpacing(10); setLayoutChanging(true); setTimeout(()=>setLayoutChanging(false),200); }}>{t('horizontal')}</button>
+              <select className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border bg-white/10 text-white/80 border-white/20 hover:bg-white/20 outline-none appearance-none cursor-pointer text-center`} value={selectedFont} onChange={(e)=>setSelectedFont(e.target.value)}>{FONTS.map(f=><option key={f} value={f} style={{fontFamily:f}} className="bg-gray-900">{f}</option>)}</select>
+            </div>
+          </div>
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('textAlign')}</label><div className="flex gap-1.5">{(['left','center','right'] as TextAlign[]).map(a=>(<button key={a} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${metricAlign===a?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setMetricAlign(a)}>{a==='left'?'◀ ':a==='right'?' ▶':'◆ '}{t(`align${a.charAt(0).toUpperCase()+a.slice(1)}`)}</button>))}</div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('font')}</label><select className="input-field" value={selectedFont} onChange={(e)=>setSelectedFont(e.target.value)}>{FONTS.map(f=><option key={f} value={f} style={{fontFamily:f}} className="bg-gray-900">{f}</option>)}</select></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1.5 block">{language==='ko'?'색상':'Colors'}</label><div className="flex gap-4 items-center"><div className="flex items-center gap-2"><span className="text-[10px] text-white/40">🔢 {language==='ko'?'숫자':'Digit'}</span><input type="color" value={digitColor} onChange={(e)=>setDigitColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer"/></div><div className="flex items-center gap-2"><span className="text-[10px] text-white/40">🏷 {language==='ko'?'라벨':'Label'}</span><input type="color" value={labelColor} onChange={(e)=>setLabelColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer"/></div></div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1.5 block">{language==='ko'?'크기':'Size'}</label><div className="grid grid-cols-2 gap-2"><div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{t('metricSize')}</span><ClampedNumberInput value={metricFontSize} min={30} max={300} onChange={setMetricFontSize} className="input-field text-[11px] text-center p-1.5 w-full"/></div><div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{t('labelSize')}</span><ClampedNumberInput value={labelFontSize-30} min={0} max={270} onChange={(v)=>setLabelFontSize(v+30)} className="input-field text-[11px] text-center p-1.5 w-full"/></div></div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1.5 block">{language==='ko'?'간격':'Spacing'}</label><div className="grid grid-cols-2 gap-2"><div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{language==='ko'?'기록 간격':'Record Gap'}</span><ClampedNumberInput value={spacing} min={0} max={80} onChange={setSpacing} className="input-field text-[11px] text-center p-1.5 w-full"/></div><div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{language==='ko'?'라벨 간격':'Label Gap'}</span><ClampedNumberInput value={labelGapValue} min={0} max={20} onChange={setLabelGapValue} className="input-field text-[11px] text-center p-1.5 w-full"/></div></div></div>
+          <div>
+            <label className="text-xs font-medium text-white/60 mb-1.5 block">{language==='ko'?'색상 및 테마':'Colors & Themes'}</label>
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg border border-white/10">
+                  <span className="text-[10px] text-white/70 font-bold min-w-[40px] pl-1">{language==='ko'?'기록':'Digit'}</span>
+                  <input type="color" value={digitColor} onChange={(e)=>setDigitColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer bg-transparent border-0 p-0"/>
+                </div>
+                <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg border border-white/10">
+                  <span className="text-[10px] text-white/70 font-bold min-w-[40px] pl-1">{language==='ko'?'라벨':'Label'}</span>
+                  <input type="color" value={labelColor} onChange={(e)=>setLabelColor(e.target.value)} className="w-6 h-6 rounded cursor-pointer bg-transparent border-0 p-0"/>
+                </div>
+              </div>
+              <div className="flex-1 grid grid-cols-4 gap-1.5">
+                {THEMES.map(th => (
+                  <button key={th.name} className="group relative flex flex-col items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:border-[#e94560] transition-all overflow-hidden p-1.5" onClick={() => { setDigitColor(th.digit); setLabelColor(th.label); }} title={th.name}>
+                    <div className="flex w-full h-6 rounded-sm overflow-hidden">
+                      <div style={{backgroundColor: th.digit}} className="flex-1"/>
+                      <div style={{backgroundColor: th.label}} className="flex-1"/>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-white/60 mb-1.5 block">{language==='ko'?'크기 및 간격':'Size & Spacing'}</label>
+            <div className="grid grid-cols-3 gap-2">
+              <div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{t('labelSize')}</span><ClampedNumberInput value={labelFontSize-30} min={0} max={270} onChange={(v)=>setLabelFontSize(v+30)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{language==='ko'?'기록 간격':'Record Gap'}</span><ClampedNumberInput value={spacing} min={0} max={80} onChange={setSpacing} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[9px] text-white/35 block mb-0.5 truncate">{language==='ko'?'라벨 간격':'Label Gap'}</span><ClampedNumberInput value={labelGapValue} min={0} max={20} onChange={setLabelGapValue} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+            </div>
+          </div>
         </Section></div>
         <div className={`${activeTab===2?'block':'hidden'} space-y-2.5`}><Section title={t('sectionAnimation')} defaultOpen={true}>
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
@@ -594,25 +664,25 @@ export function App(){
         </Section></div>
         <div className={`${activeTab===3?'block':'hidden'} space-y-2.5`}><Section title={t('sectionText')} defaultOpen={true}>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={addTextOverlay}>✏️ {t('addText')}</button>
-          {textOverlays.map(ov=>(<div key={ov.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5"><input className="input-field text-sm" value={ov.text} onChange={(e)=>updateTextOverlay(ov.id,'text',e.target.value)}/><div className="flex gap-2 items-center"><div><span className="text-[9px] text-white/30">{t('textSize')}</span><ClampedNumberInput value={ov.fontSize} min={6} max={200} onChange={(v)=>updateTextOverlay(ov.id,'fontSize',v)} className="input-field text-xs text-center p-1.5 w-16"/></div><input type="color" value={ov.color} onChange={(e)=>updateTextOverlay(ov.id,'color',e.target.value)} className="w-8 h-8 rounded cursor-pointer"/></div></div>))}
+          {textOverlays.map(ov=>(<div key={ov.id} className="bg-white/3 rounded-lg p-2 flex items-center gap-2 border border-white/5"><input className="flex-1 input-field text-sm h-9" value={ov.text} onChange={(e)=>updateTextOverlay(ov.id,'text',e.target.value)} placeholder="텍스트 입력"/><input type="color" value={ov.color} onChange={(e)=>updateTextOverlay(ov.id,'color',e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0 shrink-0"/><button className="bg-red-500/20 text-red-400 p-2 rounded-lg hover:bg-red-500/30 shrink-0 h-9 w-9 flex items-center justify-center" onClick={()=>setTextOverlays(p=>p.filter(o=>o.id!==ov.id))}>✕</button></div>))}
         </Section>
         <Section title={t('sectionEmoji')} defaultOpen={true}><div className="grid grid-cols-8 gap-0.5">{RUNNING_EMOJIS.map((emoji,i)=>(<button key={`${emoji}-${i}`} className="text-lg hover:scale-125 p-1 rounded hover:bg-white/5 active:scale-95" onClick={()=>addEmojiOverlay(emoji)}>{emoji}</button>))}</div></Section></div>
         <div className={`${activeTab===4?'block':'hidden'} space-y-2.5`}><Section title={t('sectionMedia')} defaultOpen={true}>
           <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaUpload}/>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={()=>mediaInputRef.current?.click()}>📁 {t('uploadMedia')}</button>
           {bgMediaUrl&&(<div className="space-y-2 mt-2"><button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button></div>)}
-          <div className="border-t border-white/10 pt-3 mt-3"><label className="text-xs font-medium text-white/60 mb-2 block">🖼️ {language==='ko'?'스티커 이미지 (최대 1장)':'Sticker Image (max 1)'}</label>
+          <div className="border-t border-white/10 pt-3 mt-3"><label className="text-xs font-medium text-white/60 mb-2 block">🖼️ {language==='ko'?'스티커 이미지 (최대 2장)':'Sticker Image (max 2)'}</label>
           <input ref={stickerInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{
-            const file=e.target.files?.[0]; if(!file||stickers.length>=1)return;
+            const file=e.target.files?.[0]; if(!file||stickers.length>=2)return;
             const url=URL.createObjectURL(file);
             const img=new Image(); img.src=url;
             img.onload=()=>{
-                setStickers([{id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: 5, rounded: false}]);
+                setStickers(p=>[...p, {id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: 5, rounded: false}]);
                 if(stickerInputRef.current)stickerInputRef.current.value='';
             };
           }}/>
-          {stickers.length<1&&(<button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95 mb-2" onClick={()=>stickerInputRef.current?.click()}>📎 {language==='ko'?'스티커 추가':'Add Sticker'}</button>)}
-          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리(1~5)':'Border(1-5)'}</span><ClampedNumberInput value={st.borderWidth} min={0} max={5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div className="flex flex-col items-center justify-center"><span className="text-[9px] text-white/30 mb-1">{language==='ko'?'라운드':'Round'}</span><input type="checkbox" checked={st.rounded} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,rounded:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers([])}>✕</button></div><div className="flex gap-3 items-center pt-1 border-t border-white/5 mt-1"><div className="flex items-center gap-1.5"><input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/><span className="text-[10px] text-white/50">{t('timeSetting')}</span></div>{st.useTimeRange && (<div className="flex-1 flex gap-2"><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">S</span><ClampedNumberInput value={st.startTime || 0} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,startTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">E</span><ClampedNumberInput value={st.endTime || 5} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,endTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div></div>)}</div></div>))}</div>
+          {stickers.length<2&&(<button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95 mb-2" onClick={()=>stickerInputRef.current?.click()}>📎 {language==='ko'?'스티커 추가':'Add Sticker'}</button>)}
+          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리(1~5)':'Border(1-5)'}</span><ClampedNumberInput value={st.borderWidth} min={0} max={5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div className="flex flex-col items-center justify-center"><span className="text-[9px] text-white/30 mb-1">{language==='ko'?'라운드':'Round'}</span><input type="checkbox" checked={st.rounded} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,rounded:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers(p=>p.filter(s=>s.id!==st.id))}>✕</button></div><div className="flex gap-3 items-center pt-1 border-t border-white/5 mt-1"><div className="flex items-center gap-1.5"><input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/><span className="text-[10px] text-white/50">{t('timeSetting')}</span></div>{st.useTimeRange && (<div className="flex-1 flex gap-2"><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">S</span><ClampedNumberInput value={st.startTime || 0} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,startTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">E</span><ClampedNumberInput value={st.endTime || 5} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,endTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div></div>)}</div></div>))}</div>
         </Section>
         <Section title={t('sectionExport')} defaultOpen={true}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="0.5" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
       </aside>
