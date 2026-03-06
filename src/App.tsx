@@ -8,7 +8,7 @@ interface EmojiOverlay { id: string; emoji: string; x: number; y: number; size: 
 interface StickerData { id: string; url: string; x: number; y: number; size: number; rotation: number; borderWidth: number; borderColor: string; aspectRatio: number; img?: HTMLImageElement; useTimeRange?: boolean; startTime?: number; endTime?: number; rounded?: boolean; }
 
 /* ─── Constants ─── */
-const FONTS = ['Orbitron','Bebas Neue','Russo One','Poppins'];
+const FONTS = ['Orbitron','Russo One','Black Ops One','Bungee','Silkscreen'];
 const RUNNING_EMOJIS = ['🏃','🏃‍♂️','🏃‍♀️','👟','🥇','🏅','⏱️','🔥','💪','❤️','🎯','⚡','🌟','🏆','🎽','💨','👣','🏁','🥈','🥉','⭐','✨','🎉','💯','❤️‍🔥','🦵','🫀','🌈','🌅','🌄','😤','🤩','💫','🎵','🌸','🍀','🌺','🌻','💐','🌿'];
 const ASPECT_RATIOS: Record<string, { w: number; h: number; label: string }> = { '1:1': { w: 1080, h: 1080, label: '1:1' }, '16:9': { w: 1920, h: 1080, label: '16:9' }, '9:16': { w: 1080, h: 1920, label: '9:16' } };
 const SOUND_TYPES = ['drop','bubble','tick'] as const;
@@ -647,10 +647,11 @@ export function App(){
             </div>
           </div>
           <div>
-            <div className="grid grid-cols-3 gap-2">
-              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'라벨 크기':'Label Size'}</span><ClampedNumberInput value={labelFontSize-30} min={0} max={270} onChange={(v)=>setLabelFontSize(v+30)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
-              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'기록 간격':'Record Gap'}</span><ClampedNumberInput value={spacing+7} min={0} max={80} onChange={(v)=>setSpacing(v-7)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
-              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'라벨 간격':'Label Gap'}</span><ClampedNumberInput value={labelGapValue+6} min={0} max={20} onChange={(v)=>setLabelGapValue(v-6)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+            <div className="grid grid-cols-4 gap-1.5">
+              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'전체 크기':'Size'}</span><ClampedNumberInput value={metricFontSize-90} min={0} max={410} onChange={(v)=>setMetricFontSize(v+90)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'라벨 크기':'Label'}</span><ClampedNumberInput value={labelFontSize-65} min={0} max={270} onChange={(v)=>setLabelFontSize(v+65)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'기록 간격':'Gap'}</span><ClampedNumberInput value={spacing+7} min={0} max={80} onChange={(v)=>setSpacing(v-7)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'라벨 간격':'L-Gap'}</span><ClampedNumberInput value={labelGapValue+6} min={0} max={20} onChange={(v)=>setLabelGapValue(v-6)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
             </div>
           </div>
         </Section></div>
@@ -717,18 +718,18 @@ export function App(){
                 return (<div key={st.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 ${st.rounded ? 'rounded-[15%]' : ''}`} data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none', overflow:st.rounded?'hidden':'visible'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>);
             })}
 
-            {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40 scale-75 origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white text-xs font-bold px-2.5 py-1.5 rounded shadow-lg" onClick={deleteSelected}>🗑 {language==='ko'?'삭제':'Delete'}</button></div>)}
+            {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40 scale-75 origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white text-sm font-bold px-3 py-2 rounded shadow-lg" onClick={deleteSelected}>🗑 <span className="text-base">삭제</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
         </div>
         <div className="grid grid-cols-4 lg:grid-cols-2 gap-2.5 max-w-md mx-auto">
-          <button className="w-full h-12 rounded-xl font-bold text-[11px] lg:text-sm bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording}>{t('play')}</button>
-          <button className="w-full h-12 rounded-xl font-bold text-[11px] lg:text-sm bg-white/15 text-white border border-white/30 active:scale-95 disabled:opacity-40" onClick={resetAnimation} disabled={isRecording}>{t('reset')}</button>
-          <button className="w-full h-12 rounded-xl font-bold text-[11px] lg:text-sm active:scale-95 disabled:opacity-40" onClick={startRecording} disabled={isRecording} style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}>{isRecording?t('recording'):t('record')}</button>
+          <button className="w-full h-12 rounded-xl font-bold text-sm lg:text-xl bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording}>{t('play')}</button>
+          <button className="w-full h-12 rounded-xl font-bold text-sm lg:text-xl bg-white/15 text-white border border-white/30 active:scale-95 disabled:opacity-40" onClick={resetAnimation} disabled={isRecording}>{t('reset')}</button>
+          <button className="w-full h-12 rounded-xl font-bold text-sm lg:text-xl active:scale-95 disabled:opacity-40" onClick={startRecording} disabled={isRecording} style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}>{isRecording?t('recording'):t('record')}</button>
           <a 
             href={videoUrl || '#'} 
             download={videoUrl ? `runviz-record.${videoMimeType === 'video/mp4' ? 'mp4' : 'webm'}` : undefined}
-            className={`w-full h-12 flex items-center justify-center rounded-xl font-bold text-[11px] lg:text-sm bg-[#059669] text-white active:scale-95 no-underline ${!videoUrl ? 'opacity-40 pointer-events-none' : ''}`}
+            className={`w-full h-12 flex items-center justify-center rounded-xl font-bold text-sm lg:text-xl bg-[#059669] text-white active:scale-95 no-underline ${!videoUrl ? 'opacity-40 pointer-events-none' : ''}`}
             onClick={(e) => { if (!videoUrl) e.preventDefault(); }}
             aria-disabled={!videoUrl}
           >💾 {language==='ko'?'다운로드':'Download'}</a>
