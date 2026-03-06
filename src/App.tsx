@@ -295,9 +295,8 @@ const uid = () => Math.random().toString(36).slice(2,10);
 const pad2 = (n: string|number) => String(n).padStart(2,'0');
 
 /* ─── Collapsible ─── */
-function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }){
-  const [open,setOpen]=useState(defaultOpen);
-  return(<div className="glass-panel p-3 fade-in"><div className="w-full flex items-center justify-between text-left"><span className="section-title mb-0">{title}</span><button className="section-title mb-0 opacity-50 hover:opacity-100 transition-opacity p-1" onClick={()=>setOpen(!open)}>{open?'▲':'▼'}</button></div>{open&&<div className="mt-3 space-y-3">{children}</div>}</div>);
+function Section({ title, children }: { title: string; children: React.ReactNode; }){
+  return(<div className="glass-panel p-3 fade-in"><div className="w-full flex items-center justify-between text-left"><span className="section-title mb-0">{title}</span></div><div className="mt-3 space-y-3">{children}</div></div>);
 }
 
 function ClampedNumberInput({ value, min, max, step, onChange, className, title, disabled }:{ value:number; min:number; max:number; step?:number; onChange:(v:number)=>void; className?:string; title?:string; disabled?:boolean; }){
@@ -712,7 +711,7 @@ export function App(){
         <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide sticky top-0 z-40 bg-[#08080f]/98 backdrop-blur-sm py-2 border-b border-white/8 lg:overflow-x-visible lg:flex-nowrap lg:justify-between">
           {tabLabels.map((tab,i)=>(<button key={i} className={`flex-shrink-0 lg:flex-1 lg:px-1 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap border ${activeTab===i? (i===0?'bg-blue-600 border-blue-500 shadow-blue-500/30':i===1?'bg-purple-600 border-purple-500 shadow-purple-500/30':i===2?'bg-amber-600 border-amber-500 shadow-amber-500/30':i===3?'bg-emerald-600 border-emerald-500 shadow-emerald-500/30':'bg-pink-600 border-pink-500 shadow-pink-500/30') + ' text-white shadow-lg' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'}`} onClick={()=>setActiveTab(i)}><span className="mr-1 lg:hidden">{tab.icon}</span>{tab.label}</button>))}
         </div>
-        <div className={`${activeTab===0?'block':'hidden'}`}><Section title={t('sectionData')} defaultOpen={true}>
+        <div className={`${activeTab===0?'block':'hidden'}`}><Section title={t('sectionData')}>
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center">
               <label className="flex items-center cursor-pointer select-none scale-125 origin-left ml-1">
@@ -740,7 +739,7 @@ export function App(){
           </div>
           <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setPaceSec(e.target.value)} /></div></div></div>
         </Section></div>
-        <div className={`${activeTab===1?'block':'hidden'}`}><Section title={t('sectionStyle')} defaultOpen={true}>
+        <div className={`${activeTab===1?'block':'hidden'}`}><Section title={t('sectionStyle')}>
           <div>
             <label className="text-xs font-medium text-white/60 mb-1 block">{t('layout')} & {t('font')}</label>
             <div className="flex gap-1.5">
@@ -784,7 +783,7 @@ export function App(){
             </div>
           </div>
         </Section></div>
-        <div className={`${activeTab===2?'block':'hidden'} space-y-2.5`}><Section title={t('sectionAnimation')} defaultOpen={true}>
+        <div className={`${activeTab===2?'block':'hidden'} space-y-2.5`}><Section title={t('sectionAnimation')}>
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
           
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} disabled={!animEnabled} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'} ${!animEnabled?'opacity-40 cursor-not-allowed':''}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
@@ -805,7 +804,7 @@ export function App(){
             </div>
           </div>
         </Section>
-        <Section title={t('sectionSound')} defaultOpen={true}>
+        <Section title={t('sectionSound')}>
           <div className="flex items-center justify-between"><label className="text-sm font-semibold text-white/80">{t('soundOn')}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${soundEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setSoundEnabled(!soundEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${soundEnabled?'left-6':'left-0.5'}`}/></button></div>
           <div className="flex gap-1.5 mt-2">
             {SOUND_TYPES.map(st=>(
@@ -814,12 +813,12 @@ export function App(){
           </div>
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('volume')}: {Math.round(soundVolume*100)}%</label><input type="range" min="0" max="1" step="0.05" disabled={!soundEnabled} value={soundVolume} onChange={(e)=>setSoundVolume(Number(e.target.value))} className="thumb-only-slider"/></div>
         </Section></div>
-        <div className={`${activeTab===3?'block':'hidden'} space-y-2.5`}><Section title={t('sectionText')} defaultOpen={true}>
+        <div className={`${activeTab===3?'block':'hidden'} space-y-2.5`}><Section title={t('sectionText')}>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={addTextOverlay}>✏️ {t('addText')}</button>
           {textOverlays.map(ov=>(<div key={ov.id} className="bg-white/3 rounded-lg p-2 flex items-center gap-2 border border-white/5"><input className="flex-1 input-field text-sm h-9" value={ov.text} onChange={(e)=>updateTextOverlay(ov.id,'text',e.target.value)} placeholder="텍스트 입력"/><input type="color" value={ov.color} onChange={(e)=>updateTextOverlay(ov.id,'color',e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0 shrink-0"/><button className="bg-red-500/20 text-red-400 p-2 rounded-lg hover:bg-red-500/30 shrink-0 h-9 w-9 flex items-center justify-center" onClick={()=>setTextOverlays(p=>p.filter(o=>o.id!==ov.id))}>✕</button></div>))}
         </Section>
-        <Section title={t('sectionEmoji')} defaultOpen={true}><div className="grid grid-cols-8 gap-0.5">{RUNNING_EMOJIS.map((emoji,i)=>(<button key={`${emoji}-${i}`} className="text-lg hover:scale-125 p-1 rounded hover:bg-white/5 active:scale-95" onClick={()=>addEmojiOverlay(emoji)}>{emoji}</button>))}</div></Section></div>
-        <div className={`${activeTab===4?'block':'hidden'} space-y-2.5`}><Section title={t('sectionMedia')} defaultOpen={true}>
+        <Section title={t('sectionEmoji')}><div className="grid grid-cols-8 gap-0.5">{RUNNING_EMOJIS.map((emoji,i)=>(<button key={`${emoji}-${i}`} className="text-lg hover:scale-125 p-1 rounded hover:bg-white/5 active:scale-95" onClick={()=>addEmojiOverlay(emoji)}>{emoji}</button>))}</div></Section></div>
+        <div className={`${activeTab===4?'block':'hidden'} space-y-2.5`}><Section title={t('sectionMedia')}>
           <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaUpload}/>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={()=>mediaInputRef.current?.click()}>📁 {t('uploadMedia')}</button>
           {bgMediaUrl&&(<div className="space-y-2 mt-2"><button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button></div>)}
@@ -836,7 +835,7 @@ export function App(){
           {stickers.length<2&&(<button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95 mb-2" onClick={()=>stickerInputRef.current?.click()}>📎 {language==='ko'?'스티커 추가':'Add Sticker'}</button>)}
           {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리(1~5)':'Border(1-5)'}</span><ClampedNumberInput value={st.borderWidth} min={0} max={5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div className="flex flex-col items-center justify-center"><span className="text-[9px] text-white/30 mb-1">{language==='ko'?'라운드':'Round'}</span><input type="checkbox" checked={st.rounded} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,rounded:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers(p=>p.filter(s=>s.id!==st.id))}>✕</button></div><div className="flex gap-3 items-center pt-1 border-t border-white/5 mt-1"><div className="flex items-center gap-1.5"><input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/><span className="text-[10px] text-white/50">{t('timeSetting')}</span></div>{st.useTimeRange && (<div className="flex-1 flex gap-2"><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">S</span><ClampedNumberInput value={st.startTime || 0} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,startTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">E</span><ClampedNumberInput value={st.endTime || 5} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,endTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div></div>)}</div></div>))}</div>
         </Section>
-        <Section title={t('sectionExport')} defaultOpen={true}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="0.5" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
+        <Section title={t('sectionExport')}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="0.5" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
       </aside>
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">

@@ -64,6 +64,17 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 2px 8px rgba(233,69,96,0.4);
 }
 
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: #333 !important;
+  border-color: #555 !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}
+
+input[type="range"]:disabled {
+  background: rgba(255,255,255,0.08);
+}
+
 input[type="color"] {
   -webkit-appearance: none;
   appearance: none;
