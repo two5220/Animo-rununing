@@ -78,6 +78,7 @@ interface OdometerGroupProps {
   staggerDelay: number;
   spinCycles?: number;
   noTransition?: boolean;
+  digitGap?: number;
 }
 
 export function OdometerGroup({
@@ -91,11 +92,13 @@ export function OdometerGroup({
   staggerDelay,
   spinCycles = 0,
   noTransition = false,
+  digitGap,
 }: OdometerGroupProps) {
   const digitHeight = fontSize * 1.35;
+  const finalGap = digitGap !== undefined ? digitGap : fontSize * 0.06;
 
   return (
-    <div className="flex items-center" style={{ gap: fontSize * 0.06 }}>
+    <div className="flex items-center" style={{ gap: finalGap }}>
       {value.split('').map((char, i) => {
         if (char === ':' || char === '.' || char === '\'' || char === '"') {
           return (

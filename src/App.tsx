@@ -3,15 +3,15 @@ import { OdometerGroup, type AnimStyle } from './components/Odometer';
 import { translations, LANG_NAMES, type Language } from './i18n';
 
 /* ─── Types ─── */
-interface TextOverlay { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontFamily: string; }
-interface EmojiOverlay { id: string; emoji: string; x: number; y: number; size: number; }
+interface TextOverlay { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontFamily: string; rotation: number; }
+interface EmojiOverlay { id: string; emoji: string; x: number; y: number; size: number; rotation: number; }
 interface StickerData { id: string; url: string; x: number; y: number; size: number; rotation: number; borderWidth: number; borderColor: string; aspectRatio: number; img?: HTMLImageElement; useTimeRange?: boolean; startTime?: number; endTime?: number; rounded?: boolean; }
 
 /* ─── Constants ─── */
 const FONTS = ['Orbitron','Bebas Neue','Russo One','Poppins'];
 const RUNNING_EMOJIS = ['🏃','🏃‍♂️','🏃‍♀️','👟','🥇','🏅','⏱️','🔥','💪','❤️','🎯','⚡','🌟','🏆','🎽','💨','👣','🏁','🥈','🥉','⭐','✨','🎉','💯','❤️‍🔥','🦵','🫀','🌈','🌅','🌄','😤','🤩','💫','🎵','🌸','🍀','🌺','🌻','💐','🌿'];
 const ASPECT_RATIOS: Record<string, { w: number; h: number; label: string }> = { '1:1': { w: 1080, h: 1080, label: '1:1' }, '16:9': { w: 1920, h: 1080, label: '16:9' }, '9:16': { w: 1080, h: 1920, label: '9:16' } };
-const SOUND_TYPES = ['drop','bubble','tick','casual'] as const;
+const SOUND_TYPES = ['drop','bubble','tick'] as const;
 let CURRENT_SPIN = 3;
 
 const THEMES = [
@@ -118,7 +118,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   ctx.clearRect(0,0,w,h); if(cfg.greenScreen && !cfg.bgMedia){ ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,w,h); }
   if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.005*w; const cy=h/2+(cfg.bgMediaY-50)*0.005*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
   const scaleX=w/cfg.previewW, scaleY=h/cfg.previewH, scale=Math.min(scaleX,scaleY);
-  const baseFS=cfg.baseFontSize*scale; const digitW=baseFS*0.7, digitH=baseFS*1.35, digitGap=baseFS*0.06, sepW=baseFS*0.35; const labelFS=baseFS*0.4*(cfg.labelScale/100); const labelGap=(cfg.labelGapPx-10)*scale; const suffixFS=baseFS*0.54; const metricGap=(15+cfg.spacing*3)*scale; const easingFn=EASINGS[cfg.animStyle];
+  const baseFS=cfg.baseFontSize*scale; const digitW=baseFS*0.7, digitH=baseFS*1.35, digitGap=baseFS*0.06*(cfg.spacing/10), sepW=baseFS*0.35; const labelFS=baseFS*0.4*(cfg.labelScale/100); const labelGap=(cfg.labelGapPx-10)*scale; const suffixFS=baseFS*0.54; const metricGap=(15+cfg.spacing*3)*scale; const easingFn=EASINGS[cfg.animStyle];
   const metrics=[{label:cfg.labelDuration,value:cfg.durationStr,suffix:''},{label:cfg.labelDistance,value:cfg.distanceStr,suffix:cfg.unitKm},{label:cfg.labelPace,value:cfg.paceStr,suffix:cfg.unitPace}];
   const widths=metrics.map(m=>calcDigitsWidth(m.value,digitW,digitGap,sepW)); const blockH=(cfg.showLabels?labelFS+labelGap:0)+digitH; const centerX=(cfg.recordX/100)*w, centerY=(cfg.recordY/100)*h; const isVert=cfg.layout==='vertical';
   let totalW:number,totalH:number; if(isVert){ totalH=metrics.length*blockH+(metrics.length-1)*metricGap; totalW=Math.max(...widths);} else { totalW=widths.reduce((s,d)=>s+d,0)+(metrics.length-1)*metricGap; totalH=blockH; }
@@ -183,8 +183,20 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
 
     if(isVert){ curY+=blockH+metricGap;} else { curX+=dw+metricGap; }
   });
-  cfg.textOverlays.forEach(ov=>{ ctx.fillStyle=ov.color; ctx.font=`600 ${ov.fontSize*scale}px ${ov.fontFamily}`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ov.text,(ov.x/100)*w,(ov.y/100)*h); });
-  cfg.emojiOverlays.forEach(ov=>{ ctx.font=`${ov.size*scale}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ov.emoji,(ov.x/100)*w,(ov.y/100)*h); });
+  cfg.textOverlays.forEach(ov=>{
+    ctx.save();
+    ctx.translate((ov.x/100)*w, (ov.y/100)*h);
+    ctx.rotate((ov.rotation * Math.PI) / 180);
+    ctx.fillStyle=ov.color; ctx.font=`600 ${ov.fontSize*scale}px ${ov.fontFamily}`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ov.text,0,0);
+    ctx.restore();
+  });
+  cfg.emojiOverlays.forEach(ov=>{
+    ctx.save();
+    ctx.translate((ov.x/100)*w, (ov.y/100)*h);
+    ctx.rotate((ov.rotation * Math.PI) / 180);
+    ctx.font=`${ov.size*scale}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(ov.emoji,0,0);
+    ctx.restore();
+  });
   cfg.stickerData.forEach(st=>{
     if(!st.img) return;
     if(st.useTimeRange){
@@ -253,7 +265,7 @@ const pad2 = (n: string|number) => String(n).padStart(2,'0');
 /* ─── Collapsible ─── */
 function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }){
   const [open,setOpen]=useState(defaultOpen);
-  return(<div className="glass-panel p-3 fade-in"><button className="w-full flex items-center justify-between text-left" onClick={()=>setOpen(!open)}><span className="section-title mb-0">{title}</span><span className="text-xs opacity-50">{open?'▲':'▼'}</span></button>{open&&<div className="mt-3 space-y-3">{children}</div>}</div>);
+  return(<div className="glass-panel p-3 fade-in"><div className="w-full flex items-center justify-between text-left"><span className="section-title mb-0">{title}</span><button className="section-title mb-0 opacity-50 hover:opacity-100 transition-opacity p-1" onClick={()=>setOpen(!open)}>{open?'▲':'▼'}</button></div>{open&&<div className="mt-3 space-y-3">{children}</div>}</div>);
 }
 
 function ClampedNumberInput({ value, min, max, step, onChange, className, title }:{ value:number; min:number; max:number; step?:number; onChange:(v:number)=>void; className?:string; title?:string; }){
@@ -267,7 +279,7 @@ function ClampedNumberInput({ value, min, max, step, onChange, className, title 
 export function App(){
   const [language,setLanguage]=useState<Language>('ko'); const t=useCallback((k:string)=>translations[language]?.[k]||k,[language]);
   const [hours,setHours]=useState('0'); const [minutes,setMinutes]=useState('32'); const [seconds,setSeconds]=useState('15'); const [distance,setDistance]=useState('5.21'); const [paceMin,setPaceMin]=useState('6'); const [paceSec,setPaceSec]=useState('12'); const [labelLang,setLabelLang]=useState<'en'|'ko'>('ko');
-  const [showLabels,setShowLabels]=useState(true); const [showUnits,setShowUnits]=useState(true); const [digitColor,setDigitColor]=useState('#e94560'); const [labelColor,setLabelColor]=useState('#a0aec0'); const [metricFontSize,setMetricFontSize]=useState(100); const [labelFontSize,setLabelFontSize]=useState(140); const [metricAlign,setMetricAlign]=useState<TextAlign>('center'); const [selectedFont,setSelectedFont]=useState('Orbitron'); const [layout,setLayout]=useState<'vertical'|'horizontal'>('vertical'); const [spacing,setSpacing]=useState(5); const [labelGapValue,setLabelGapValue]=useState(5); const [recordX,setRecordX]=useState(50); const [recordY,setRecordY]=useState(50);
+  const [showLabels,setShowLabels]=useState(true); const [showUnits,setShowUnits]=useState(true); const [digitColor,setDigitColor]=useState('#e94560'); const [labelColor,setLabelColor]=useState('#a0aec0'); const [metricFontSize,setMetricFontSize]=useState(100); const [labelFontSize,setLabelFontSize]=useState(105); const [metricAlign,setMetricAlign]=useState<TextAlign>('center'); const [selectedFont,setSelectedFont]=useState('Orbitron'); const [layout,setLayout]=useState<'vertical'|'horizontal'>('vertical'); const [spacing,setSpacing]=useState(3); const [labelGapValue,setLabelGapValue]=useState(4); const [recordX,setRecordX]=useState(50); const [recordY,setRecordY]=useState(50);
   const [animStyle,setAnimStyle]=useState<AnimStyle>('machine'); const [animDuration,setAnimDuration]=useState(5000); const [spinCycles,setSpinCycles]=useState(3); useEffect(()=>{ CURRENT_SPIN=spinCycles; },[spinCycles]); const [showValues,setShowValues]=useState(false); const [isAnimating,setIsAnimating]=useState(false); const [animKey,setAnimKey]=useState(0); const [layoutChanging,setLayoutChanging]=useState(false);
   const [soundEnabled,setSoundEnabled]=useState(true); const [soundVolume,setSoundVolume]=useState(0.5); const [soundType,setSoundType]=useState('tick'); const activeAudioCtxRef=useRef<AudioContext|null>(null); const previewAudioCtxRef=useRef<AudioContext|null>(null);
   const [extraHoldTime,setExtraHoldTime]=useState(2);
@@ -332,8 +344,8 @@ export function App(){
       let id = '';
 
       if(sel === 'record') { ox=recordX; oy=recordY; os=metricFontSizeRef.current; }
-      else if(sel.startsWith('text-')) { id=sel.replace('text-',''); const f=textOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.fontSize;} type='text'; }
-      else if(sel.startsWith('emoji-')) { id=sel.replace('emoji-',''); const f=emojiOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.size;} type='emoji'; }
+      else if(sel.startsWith('text-')) { id=sel.replace('text-',''); const f=textOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.fontSize;or=f.rotation;} type='text'; }
+      else if(sel.startsWith('emoji-')) { id=sel.replace('emoji-',''); const f=emojiOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.size;or=f.rotation;} type='emoji'; }
       else if(sel.startsWith('sticker-')) { id=sel.replace('sticker-',''); const f=stickersRef.current.find(s=>s.id===id); if(f){ox=f.x;oy=f.y;os=f.size;or=f.rotation;} type='sticker'; }
 
       interactionRef.current = {
@@ -361,8 +373,8 @@ export function App(){
         markResizing();
 
         if(ir.type === 'record') setMetricFontSize(nextSize);
-        else if(ir.type === 'text') setTextOverlays(p => p.map(o => o.id === ir.id ? { ...o, fontSize: nextSize } : o));
-        else if(ir.type === 'emoji') setEmojiOverlays(p => p.map(o => o.id === ir.id ? { ...o, size: nextSize } : o));
+        else if(ir.type === 'text') setTextOverlays(p => p.map(o => o.id === ir.id ? { ...o, fontSize: nextSize, rotation: ir.origRotation + angleDiff } : o));
+        else if(ir.type === 'emoji') setEmojiOverlays(p => p.map(o => o.id === ir.id ? { ...o, size: nextSize, rotation: ir.origRotation + angleDiff } : o));
         else if(ir.type === 'sticker') setStickers(p => p.map(s => s.id === ir.id ? { ...s, size: nextSize, rotation: ir.origRotation + angleDiff } : s));
       } else if(ir.mode === 'drag') {
         const dx = clientX - ir.startX;
@@ -459,9 +471,9 @@ export function App(){
     try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{}
     const temp=new (window.AudioContext|| (window as any).webkitAudioContext)();
     if(temp.state==='suspended') temp.resume().catch(()=>{});
-    playSound(type,soundVolume,2000,'machine',temp);
+    playSound(type,soundVolume,1500,'machine',temp);
     previewAudioCtxRef.current=temp;
-    setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },2000);
+    setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },1500);
   };
 
   const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:s)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
@@ -558,9 +570,9 @@ export function App(){
   const handleMediaUpload=(e:React.ChangeEvent<HTMLInputElement>)=>{ const file=e.target.files?.[0]; if(!file)return; processMediaFile(file); };
   const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); };
   const deleteSelected=()=>{ if(!selectedElement)return; if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null); };
-  const addTextOverlay=()=>{ setTextOverlays(p=>[...p,{id:uid(),text:new Date().toLocaleDateString(),x:50,y:90,fontSize:16,color:labelColor,fontFamily:selectedFont}]); };
+  const addTextOverlay=()=>{ setTextOverlays(p=>[...p,{id:uid(),text:new Date().toLocaleDateString(),x:50,y:90,fontSize:16,color:labelColor,fontFamily:selectedFont, rotation: 0}]); };
   const updateTextOverlay=(id:string,field:keyof TextOverlay,value:string|number)=>{ setTextOverlays(p=>p.map(o=>o.id===id?{...o,[field]:value}:o)); };
-  const addEmojiOverlay=(emoji:string)=>{ setEmojiOverlays(p=>[...p,{id:uid(),emoji,x:10+Math.random()*80,y:10+Math.random()*80,size:28}]); };
+  const addEmojiOverlay=(emoji:string)=>{ setEmojiOverlays(p=>[...p,{id:uid(),emoji,x:10+Math.random()*80,y:10+Math.random()*80,size:28, rotation: 0}]); };
   const updateEmojiOverlay=(id:string,field:keyof EmojiOverlay,value:string|number)=>{ setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,[field]:value}:o)); };
 
   const tabLabels=[{icon:'📊',label:language==='ko'?'기록':t('sectionData')},{icon:'🎨',label:language==='ko'?'스타일':t('sectionStyle')},{icon:'⚡',label:language==='ko'?'효과':t('sectionAnimation')},{icon:'📝',label:language==='ko'?'텍스트':t('sectionText')},{icon:'📁',label:language==='ko'?'미디어':t('sectionMedia')}];
@@ -637,8 +649,8 @@ export function App(){
           <div>
             <div className="grid grid-cols-3 gap-2">
               <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'라벨 크기':'Label Size'}</span><ClampedNumberInput value={labelFontSize-30} min={0} max={270} onChange={(v)=>setLabelFontSize(v+30)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
-              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'기록 간격':'Record Gap'}</span><ClampedNumberInput value={spacing} min={0} max={80} onChange={setSpacing} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
-              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'라벨 간격':'Label Gap'}</span><ClampedNumberInput value={labelGapValue} min={0} max={20} onChange={setLabelGapValue} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'기록 간격':'Record Gap'}</span><ClampedNumberInput value={spacing+7} min={0} max={80} onChange={(v)=>setSpacing(v-7)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-xs text-white/80 font-bold block mb-1 truncate">{language==='ko'?'라벨 간격':'Label Gap'}</span><ClampedNumberInput value={labelGapValue+6} min={0} max={20} onChange={(v)=>setLabelGapValue(v-6)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
             </div>
           </div>
         </Section></div>
@@ -650,12 +662,9 @@ export function App(){
         <Section title={t('sectionSound')} defaultOpen={true}>
           <div className="flex items-center justify-between"><label className="text-sm font-semibold text-white/80">{t('soundOn')}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${soundEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setSoundEnabled(!soundEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${soundEnabled?'left-6':'left-0.5'}`}/></button></div>
           {soundEnabled&&(<>
-            <div className="grid grid-cols-2 gap-1.5 mt-2">
+            <div className="flex gap-1.5 mt-2">
               {SOUND_TYPES.map(st=>(
-                <div key={st} className="flex items-center gap-1">
-                  <button className={`flex-1 py-2.5 rounded-lg text-[10px] font-semibold transition border ${soundType===st?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20'}`} onClick={()=>setSoundType(st)}>{t(st)}</button>
-                  <button className="bg-white/10 px-2 py-2.5 rounded-lg text-[10px] border border-white/10" onClick={()=>previewSoundFn(st)}>▶</button>
-                </div>
+                  <button key={st} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border ${soundType===st?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20'}`} onClick={()=>{setSoundType(st); previewSoundFn(st);}}>{t(st)}</button>
               ))}
             </div>
             <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('volume')}: {Math.round(soundVolume*100)}%</label><input type="range" min="0" max="1" step="0.05" value={soundVolume} onChange={(e)=>setSoundVolume(Number(e.target.value))} className="thumb-only-slider"/></div>
@@ -692,14 +701,14 @@ export function App(){
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,transform:'translate(-50%, -50%)',outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none'}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging}/></div>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblPace.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`p-${animKey}`} value={showValues?paceStr:'00:00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitPace}</span>)}</div></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblPace.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`p-${animKey}`} value={showValues?paceStr:'00:00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitPace}</span>)}</div></div>
               </div>
             </div>
 
-            {textOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="text" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:selectedElement===`text-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.text}</div>))}
-            {emojiOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="emoji" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:'translate(-50%, -50%)',fontSize:ov.size,outline:selectedElement===`emoji-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.emoji}</div>))}
+            {textOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="text" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:selectedElement===`text-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.text}</div>))}
+            {emojiOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="emoji" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,fontSize:ov.size,outline:selectedElement===`emoji-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.emoji}</div>))}
             {stickers.map(st=>{
                 if(st.useTimeRange && isAnimating){
                     const curSec = previewElapsed / 1000;
@@ -708,7 +717,7 @@ export function App(){
                 return (<div key={st.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 ${st.rounded ? 'rounded-[15%]' : ''}`} data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none', overflow:st.rounded?'hidden':'visible'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>);
             })}
 
-            {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40"><button className="bg-red-500/80 hover:bg-red-500 text-white text-[10px] px-2 py-1 rounded" onClick={deleteSelected}>🗑 {language==='ko'?'삭제':'Delete'}</button></div>)}
+            {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40 scale-75 origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white text-xs font-bold px-2.5 py-1.5 rounded shadow-lg" onClick={deleteSelected}>🗑 {language==='ko'?'삭제':'Delete'}</button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
         </div>
@@ -722,7 +731,7 @@ export function App(){
             className={`w-full h-12 flex items-center justify-center rounded-xl font-bold text-[11px] lg:text-sm bg-[#059669] text-white active:scale-95 no-underline ${!videoUrl ? 'opacity-40 pointer-events-none' : ''}`}
             onClick={(e) => { if (!videoUrl) e.preventDefault(); }}
             aria-disabled={!videoUrl}
-          >💾 {t('download')}</a>
+          >💾 {language==='ko'?'다운로드':'Download'}</a>
         </div>
         {videoUrl && (
           <p className="text-[10px] text-white/40 text-center mt-1.5">
