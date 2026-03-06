@@ -102,7 +102,7 @@ function drawCanvasDigit(ctx: CanvasRenderingContext2D, x:number,y:number, width
   const offset=scrollPos*height; const total=10*(spinCycles+1); for(let i=0;i<total;i++){ const ny=y+height/2+i*height-offset; if(ny>y-height && ny<y+height*2){ ctx.fillText(String(i%10), x+width/2, ny); }} ctx.restore();
 }
 
-interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; waitBeforeAnim:number; introEffect:IntroEffect; }
+interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; waitBeforeAnim:number; introEffect:IntroEffect; animEnabled: boolean; }
 
 function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:number){
   let w=0;
@@ -119,10 +119,10 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   ctx.clearRect(0,0,w,h); if(cfg.greenScreen && !cfg.bgMedia){ ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,w,h); }
   if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.005*w; const cy=h/2+(cfg.bgMediaY-50)*0.005*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
   
-  const waitMs = cfg.waitBeforeAnim * 1000;
-  if(elapsedMs < waitMs) return; // Hidden during wait time
+  const waitMs = cfg.animEnabled ? cfg.waitBeforeAnim * 1000 : 0;
+  if(cfg.animEnabled && elapsedMs < waitMs) return; // Hidden during wait time if anim enabled
 
-  const actualElapsed = elapsedMs - waitMs;
+  const actualElapsed = cfg.animEnabled ? Math.max(0, elapsedMs - waitMs) : 100000; // Force end state if no anim
   const scaleX=w/cfg.previewW, scaleY=h/cfg.previewH, scale=Math.min(scaleX,scaleY);
   const baseFS=cfg.baseFontSize*scale; const digitW=baseFS*0.7, digitH=baseFS*1.35, digitGap=baseFS*0.06*(cfg.spacing/10), sepW=baseFS*0.35; const labelFS=baseFS*0.4*(cfg.labelScale/100); const labelGap=(cfg.labelGapPx-10)*scale; const suffixFS=baseFS*0.54; const metricGap=(15+cfg.spacing*3)*scale; const easingFn=EASINGS[cfg.animStyle];
   const metrics=[{label:cfg.labelDuration,value:cfg.durationStr,suffix:''},{label:cfg.labelDistance,value:cfg.distanceStr,suffix:cfg.unitKm},{label:cfg.labelPace,value:cfg.paceStr,suffix:cfg.unitPace}];
@@ -131,15 +131,17 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   let curX:number, curY:number; if(isVert){ curX=centerX; curY=centerY-totalH/2;} else { curX=centerX-totalW/2; curY=centerY-totalH/2; }
 
   // Intro Effect Calculation (First 500ms of actual playback)
-  const introDur = 500;
-  const introProg = Math.min(actualElapsed / introDur, 1);
+  const introDur = cfg.animEnabled ? 500 : 0;
+  const introProg = introDur > 0 ? Math.min(actualElapsed / introDur, 1) : 1;
   let globalAlpha = 1;
   let offsetY = 0;
   let globalScale = 1;
 
-  if(cfg.introEffect === 'fade') { globalAlpha = introProg; }
-  else if(cfg.introEffect === 'slide-up') { globalAlpha = introProg; offsetY = (1 - introProg) * 30 * scale; }
-  else if(cfg.introEffect === 'zoom-in') { globalAlpha = introProg; globalScale = 0.8 + 0.2 * introProg; }
+  if(cfg.animEnabled) {
+    if(cfg.introEffect === 'fade') { globalAlpha = introProg; }
+    else if(cfg.introEffect === 'slide-up') { globalAlpha = introProg; offsetY = (1 - introProg) * 30 * scale; }
+    else if(cfg.introEffect === 'zoom-in') { globalAlpha = introProg; globalScale = 0.8 + 0.2 * introProg; }
+  }
 
   ctx.save();
   ctx.globalAlpha = globalAlpha;
@@ -189,8 +191,12 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     const chars = m.value.split('');
     chars.forEach((ch,ci)=>{
       if(/[0-9]/.test(ch)){
-        const target=parseInt(ch); const dDur=cfg.animDuration+ci*cfg.staggerDelay; const prog=Math.min(Math.max(actualElapsed,0)/dDur,1); const eased=easingFn(prog); const scroll=(cfg.spinCycles*10+target)*eased;
-        drawCanvasDigit(ctx,dx,digitTop,digitW,digitH,scroll,cfg.fontFamily,baseFS,cfg.digitColor,cfg.spinCycles);
+        const target=parseInt(ch); 
+        const dDur=cfg.animDuration+ci*cfg.staggerDelay; 
+        const prog=cfg.animEnabled ? Math.min(Math.max(actualElapsed,0)/dDur,1) : 1; 
+        const eased=easingFn(prog); 
+        const scroll=(cfg.animEnabled ? cfg.spinCycles*10+target : target)*eased;
+        drawCanvasDigit(ctx,dx,digitTop,digitW,digitH,scroll,cfg.fontFamily,baseFS,cfg.digitColor,cfg.animEnabled ? cfg.spinCycles : 0);
         dx+=digitW;
       } else {
         ctx.fillStyle=cfg.digitColor; ctx.font=`bold ${baseFS*0.9}px ${cfg.fontFamily}`; ctx.textAlign='left'; ctx.textBaseline='top';
@@ -225,7 +231,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   });
   cfg.stickerData.forEach(st=>{
     if(!st.img) return;
-    if(st.useTimeRange){
+    if(st.useTimeRange && cfg.animEnabled){
         const curSec = elapsedMs / 1000;
         if(curSec < (st.startTime || 0) || curSec > (st.endTime || 999)) return;
     }
@@ -294,11 +300,11 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
   return(<div className="glass-panel p-3 fade-in"><div className="w-full flex items-center justify-between text-left"><span className="section-title mb-0">{title}</span><button className="section-title mb-0 opacity-50 hover:opacity-100 transition-opacity p-1" onClick={()=>setOpen(!open)}>{open?'▲':'▼'}</button></div>{open&&<div className="mt-3 space-y-3">{children}</div>}</div>);
 }
 
-function ClampedNumberInput({ value, min, max, step, onChange, className, title }:{ value:number; min:number; max:number; step?:number; onChange:(v:number)=>void; className?:string; title?:string; }){
+function ClampedNumberInput({ value, min, max, step, onChange, className, title, disabled }:{ value:number; min:number; max:number; step?:number; onChange:(v:number)=>void; className?:string; title?:string; disabled?:boolean; }){
   const [raw,setRaw]=useState(String(value)); const prev=useRef(value); useEffect(()=>{ if(value!==prev.current){ setRaw(String(value)); prev.current=value; }},[value]);
   const handleChange=(e:React.ChangeEvent<HTMLInputElement>)=>{ const v=e.target.value; setRaw(v); const n=Number(v); if(v!==''&&!isNaN(n)) onChange(n); };
   const handleBlur=()=>{ const n=Number(raw); const clamped=isNaN(n)||raw===''?Math.max(min,Math.min(max,value)):Math.max(min,Math.min(max,n)); onChange(clamped); setRaw(String(clamped)); prev.current=clamped; };
-  return(<input type="number" min={min} max={max} step={step} className={className} value={raw} onChange={handleChange} onBlur={handleBlur} title={title}/>);
+  return(<input type="number" min={min} max={max} step={step} className={className} value={raw} onChange={handleChange} onBlur={handleBlur} title={title} disabled={disabled}/>);
 }
 
 /* ─── Main App ─── */
@@ -338,6 +344,13 @@ export function App(){
     }
     return () => { if(previewTimerRef.current) clearInterval(previewTimerRef.current); };
   }, [isAnimating]);
+
+  useEffect(() => {
+    if(!animEnabled) {
+      setShowValues(true);
+      setAnimKey(k => k + 1);
+    }
+  }, [animEnabled]);
 
   const interactionRef = useRef({
     active: false,
@@ -484,9 +497,9 @@ export function App(){
   const stopAllSounds=useCallback(()=>{ try{ if(activeAudioCtxRef.current&&activeAudioCtxRef.current.state!=='closed'){ activeAudioCtxRef.current.close(); } }catch{} activeAudioCtxRef.current=null; try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{} previewAudioCtxRef.current=null; },[]);
   
   const playAnimation=()=>{
+    if(!animEnabled) return;
     stopAllSounds(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
-      if(!animEnabled){ setShowValues(true); return; }
       setIsAnimating(true);
       const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
       if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
@@ -495,7 +508,7 @@ export function App(){
     }); });
   };
   
-  const resetAnimation=()=>{ stopAllSounds(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1); };
+  const resetAnimation=()=>{ stopAllSounds(); setShowValues(!animEnabled); setIsAnimating(false); setAnimKey(k=>k+1); };
   
   const previewSoundFn=(type:string)=>{
     try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{}
@@ -522,6 +535,54 @@ export function App(){
     }
   };
 
+  const captureImage = async () => {
+    await document.fonts.ready;
+    const dims = getExportDims();
+    const canvas = document.createElement('canvas');
+    canvas.width = dims.w;
+    canvas.height = dims.h;
+    const ctx2 = canvas.getContext('2d')!;
+    
+    const previewRect = previewContainerRef.current?.getBoundingClientRect();
+    const previewW = previewRect?.width || 500;
+    const previewH = previewRect?.height || 500;
+
+    const stickerData: StickerData[] = await Promise.all(stickers.map(st => new Promise<StickerData>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = st.url;
+      img.onload = () => resolve({ ...st, img });
+      img.onerror = () => resolve({ ...st, img });
+    })));
+
+    let bgMedia: HTMLImageElement | null = null;
+    if (bgMediaUrl && bgMediaType === 'image') {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = bgMediaUrl;
+      await new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res(); });
+      bgMedia = img;
+    }
+
+    const previewFS = getPreviewFontSize();
+    const cfg: SceneConfig = {
+      digitColor, labelColor, fontFamily: selectedFont, layout, textAlign: metricAlign, spacing, recordX, recordY,
+      baseFontSize: previewFS, labelDuration: lblDuration, labelDistance: lblDistance, labelPace: lblPace,
+      unitKm, unitPace, durationStr, distanceStr: distStr, paceStr, showLabels, showUnits, labelScale: labelFontSize,
+      spinCycles: 0, animDuration: 0, staggerDelay: 0, animStyle: 'default',
+      textOverlays, emojiOverlays, stickerData, bgMedia, bgMediaX, bgMediaY, bgMediaScale, greenScreen,
+      labelGapPx: labelGapValue, canvasW: dims.w, canvasH: dims.h, previewW, previewH,
+      waitBeforeAnim: 0, introEffect: 'none', animEnabled: false
+    };
+
+    drawScene(ctx2, canvas.width, canvas.height, 100000, cfg);
+
+    const link = document.createElement('a');
+    link.download = `runviz-record-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
   const startRecording=async()=>{
     await document.fonts.ready;
     const dims=getExportDims(); const canvas=document.createElement('canvas'); canvas.width=dims.w; canvas.height=dims.h; const ctx2=canvas.getContext('2d')!;
@@ -531,13 +592,12 @@ export function App(){
     let audioCtx:AudioContext|null=null; let audioDest:MediaStreamAudioDestinationNode|null=null;
     let finalStream = canvasStream;
 
-    if(soundEnabled){
+    if(soundEnabled && animEnabled){
       try{
         audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
         await audioCtx.resume();
         audioDest = audioCtx.createMediaStreamDestination();
         
-        // Add low-level white noise to force mobile players to recognize the audio track
         const bufferSize = audioCtx.sampleRate * 1;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -565,9 +625,6 @@ export function App(){
     recorder.onstop=async()=>{
       const containerType = mimeType.split(';')[0];
       const blob=new Blob(chunks,{type:containerType});
-
-      // If it's a real MP4 or Samsung Internet, just use the blob. 
-      // Samsung Internet sometimes struggles with high bitrates or complex WebM in its native gallery.
       const url = URL.createObjectURL(blob); 
       setVideoUrl(url); 
       setVideoMimeType(containerType);
@@ -576,25 +633,48 @@ export function App(){
     };
 
     const stickerData:StickerData[]=await Promise.all(stickers.map(st=>new Promise<StickerData>((resolve)=>{const img=new Image();img.crossOrigin='anonymous';img.src=st.url;img.onload=()=>resolve({...st,img});img.onerror=()=>resolve({...st,img});})));
-    let bgMedia:HTMLImageElement|HTMLVideoElement|null=null; if(bgMediaUrl&&bgMediaType==='image'){ const img=new Image(); img.crossOrigin='anonymous'; img.src=bgMediaUrl; await new Promise<void>(res=>{ img.onload=()=>res(); img.onerror=()=>res(); }); bgMedia=img; } else if(bgMediaUrl&&bgMediaType==='video'&&bgVideoRef.current){ bgVideoRef.current.currentTime=0; bgVideoRef.current.play(); bgMedia=bgVideoRef.current; }
+    let bgMedia:HTMLImageElement|HTMLVideoElement|null=null; 
+    if(bgMediaUrl&&bgMediaType==='image'){ 
+        const img=new Image(); img.crossOrigin='anonymous'; img.src=bgMediaUrl; 
+        await new Promise<void>(res=>{ img.onload=()=>res(); img.onerror=()=>res(); }); bgMedia=img; 
+    } else if(bgMediaUrl&&bgMediaType==='video'&&bgVideoRef.current){ 
+        bgVideoRef.current.currentTime=0; bgVideoRef.current.play(); bgMedia=bgVideoRef.current; 
+    }
     
-    setIsRecording(true); setVideoUrl(null); recorder.start(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
+    setIsRecording(true); setVideoUrl(null); recorder.start(); setShowValues(!animEnabled); setIsAnimating(animEnabled); setAnimKey(k=>k+1);
     
-    const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
-    requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
-      setIsAnimating(true); if(animEnabled){ setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs); } else { setShowValues(true); }
-      if(soundEnabled && audioCtx && audioDest){
-        setTimeout(()=>{
-          playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
-        },ANIM_DELAY + totalWaitMs);
-      }
-      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
-    }); });
+    const totalWaitMs = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
+    if(animEnabled) {
+      requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
+        setIsAnimating(true); 
+        setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
+        if(soundEnabled && audioCtx && audioDest){
+          setTimeout(()=>{
+            playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
+          },ANIM_DELAY + totalWaitMs);
+        }
+        setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
+      }); });
+    }
 
-    const startTime=performance.now(); const holdMs=extraHoldTime*1000; const totalMs=totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10; const previewFS=getPreviewFontSize();
-    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH, waitBeforeAnim: useWait ? waitBeforeAnim : 0, introEffect };
+    const startTime=performance.now(); 
+    const holdMs=extraHoldTime*1000; 
+    let totalMs = animEnabled ? (totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10) : 3000; // Default 3s if no anim
     
-    function animate(now:number){ const elapsed=now-startTime; const aElapsed=Math.max(0,elapsed-ANIM_DELAY); drawScene(ctx2,canvas.width,canvas.height,aElapsed,cfg); if(elapsed<totalMs){ requestAnimationFrame(animate);} else { recorder.stop(); if(bgVideoRef.current) bgVideoRef.current.pause(); } }
+    // If video background and no anim, record for video length
+    if(!animEnabled && bgMediaType==='video' && bgVideoRef.current) {
+        totalMs = bgVideoRef.current.duration * 1000;
+    }
+
+    const previewFS=getPreviewFontSize();
+    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH, waitBeforeAnim: (animEnabled && useWait) ? waitBeforeAnim : 0, introEffect, animEnabled };
+    
+    function animate(now:number){ 
+        const elapsed=now-startTime; 
+        const aElapsed=Math.max(0,elapsed-ANIM_DELAY); 
+        drawScene(ctx2,canvas.width,canvas.height,aElapsed,cfg); 
+        if(elapsed<totalMs){ requestAnimationFrame(animate);} else { recorder.stop(); if(bgVideoRef.current) bgVideoRef.current.pause(); } 
+    }
     requestAnimationFrame(animate);
   };
 
@@ -610,16 +690,16 @@ export function App(){
   const fontSize=getPreviewFontSize(); const RECORD_GAP_PX=15+spacing*3; const LABEL_GAP_PX=labelGapValue-10;
 
   // Actual preview visibility during playback
-  const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
-  const isCurrentlyWaiting = isAnimating && previewElapsed < totalWaitMs;
-  const isActuallyPlaying = isAnimating && previewElapsed >= totalWaitMs;
-  const actualPlayElapsed = isActuallyPlaying ? previewElapsed - totalWaitMs : 0;
+  const totalWaitMs = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
+  const isCurrentlyWaiting = animEnabled && isAnimating && previewElapsed < totalWaitMs;
+  const isActuallyPlaying = isAnimating && (!animEnabled || previewElapsed >= totalWaitMs);
+  const actualPlayElapsed = isActuallyPlaying ? (animEnabled ? previewElapsed - totalWaitMs : 100000) : 0;
 
   // Intro Effect Style for Preview
-  const introDur = 500;
-  const introProg = Math.min(actualPlayElapsed / introDur, 1);
+  const introDur = animEnabled ? 500 : 0;
+  const introProg = introDur > 0 ? Math.min(actualPlayElapsed / introDur, 1) : 1;
   let previewIntroStyle: React.CSSProperties = { transform: 'translate(-50%, -50%)' };
-  if(isActuallyPlaying) {
+  if(animEnabled && isActuallyPlaying) {
     if(introEffect === 'fade') { previewIntroStyle = { ...previewIntroStyle, opacity: introProg }; }
     else if(introEffect === 'slide-up') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, calc(-50% + ${(1 - introProg) * 30}px))` }; }
     else if(introEffect === 'zoom-in') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, -50%) scale(${0.8 + 0.2 * introProg})` }; }
@@ -707,36 +787,32 @@ export function App(){
         <div className={`${activeTab===2?'block':'hidden'} space-y-2.5`}><Section title={t('sectionAnimation')} defaultOpen={true}>
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
           
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {animDuration/1000}s</label><input type="range" min="1000" max="10000" step="1000" className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
+          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} disabled={!animEnabled} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'} ${!animEnabled?'opacity-40 cursor-not-allowed':''}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
+          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {animDuration/1000}s</label><input type="range" min="1000" max="10000" step="1000" disabled={!animEnabled} className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
           
           <div className="border-t border-white/10 pt-3 mt-3">
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-semibold text-white/80">{language==='ko'?'재생 전 대기':'Wait Before Start'}</label>
               <button className={`w-12 h-6 rounded-full transition-colors relative border ${useWait?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setUseWait(!useWait)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${useWait?'left-6':'left-0.5'}`}/></button>
             </div>
-            {useWait && (
-              <div className="space-y-3">
-                <div className="flex gap-1.5">
-                  {(['fade','slide-up','zoom-in','none'] as IntroEffect[]).map(eff => (
-                    <button key={eff} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${introEffect===eff?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setIntroEffect(eff)}>{t(`intro${eff.charAt(0).toUpperCase() + eff.slice(1).replace('-','')}`)}</button>
-                  ))}
-                </div>
-                <div><label className="text-xs font-medium text-white/60 mb-1 block">{language==='ko'?`대기 시간(초): ${waitBeforeAnim}s`:`Wait Time: ${waitBeforeAnim}s`}</label><input type="range" min="1" max="10" step="1" value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/></div>
+            <div className="space-y-3">
+              <div className="flex gap-1.5">
+                {(['fade','slide-up','zoom-in','none'] as IntroEffect[]).map(eff => (
+                  <button key={eff} disabled={!useWait} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${introEffect===eff?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'} ${!useWait?'opacity-40 cursor-not-allowed':''}`} onClick={()=>setIntroEffect(eff)}>{t(`intro${eff.charAt(0).toUpperCase() + eff.slice(1).replace('-','')}`)}</button>
+                ))}
               </div>
-            )}
+              <div><label className="text-xs font-medium text-white/60 mb-1 block">{language==='ko'?`대기 시간(초): ${waitBeforeAnim}s`:`Wait Time: ${waitBeforeAnim}s`}</label><input type="range" min="1" max="10" step="1" disabled={!useWait} value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/></div>
+            </div>
           </div>
         </Section>
         <Section title={t('sectionSound')} defaultOpen={true}>
           <div className="flex items-center justify-between"><label className="text-sm font-semibold text-white/80">{t('soundOn')}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${soundEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setSoundEnabled(!soundEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${soundEnabled?'left-6':'left-0.5'}`}/></button></div>
-          {soundEnabled&&(<>
-            <div className="flex gap-1.5 mt-2">
-              {SOUND_TYPES.map(st=>(
-                  <button key={st} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border ${soundType===st?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20'}`} onClick={()=>{setSoundType(st); previewSoundFn(st);}}>{t(st)}</button>
-              ))}
-            </div>
-            <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('volume')}: {Math.round(soundVolume*100)}%</label><input type="range" min="0" max="1" step="0.05" value={soundVolume} onChange={(e)=>setSoundVolume(Number(e.target.value))} className="thumb-only-slider"/></div>
-          </>)}
+          <div className="flex gap-1.5 mt-2">
+            {SOUND_TYPES.map(st=>(
+                <button key={st} disabled={!soundEnabled} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition border ${soundType===st?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20'} ${!soundEnabled?'opacity-40 cursor-not-allowed':''}`} onClick={()=>{setSoundType(st); previewSoundFn(st);}}>{t(st)}</button>
+            ))}
+          </div>
+          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('volume')}: {Math.round(soundVolume*100)}%</label><input type="range" min="0" max="1" step="0.05" disabled={!soundEnabled} value={soundVolume} onChange={(e)=>setSoundVolume(Number(e.target.value))} className="thumb-only-slider"/></div>
         </Section></div>
         <div className={`${activeTab===3?'block':'hidden'} space-y-2.5`}><Section title={t('sectionText')} defaultOpen={true}>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={addTextOverlay}>✏️ {t('addText')}</button>
@@ -790,9 +866,16 @@ export function App(){
           </div>
         </div>
         <div className="grid grid-cols-4 lg:grid-cols-2 gap-2.5 max-w-md mx-auto">
-          <button className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording}>{t('play')}</button>
+          <button className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording||!animEnabled}>{t('play')}</button>
           <button className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl bg-white/15 text-white border border-white/30 active:scale-95 disabled:opacity-40" onClick={resetAnimation} disabled={isRecording}>{t('reset')}</button>
-          <button className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl active:scale-95 disabled:opacity-40" onClick={startRecording} disabled={isRecording} style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}>{isRecording?t('recording'):t('record')}</button>
+          <button 
+            className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl active:scale-95 disabled:opacity-40" 
+            onClick={animEnabled ? startRecording : (bgMediaType === 'video' ? startRecording : captureImage)} 
+            disabled={isRecording} 
+            style={{background:isRecording?'#dc2626':'#7c3aed',color:'white'}}
+          >
+            {isRecording ? t('recording') : (animEnabled ? t('record') : (bgMediaType === 'video' ? t('record') : (language === 'ko' ? '이미지 저장' : 'Save Image')))}
+          </button>
           <a 
             href={videoUrl || '#'} 
             download={videoUrl ? `runviz-record.${videoMimeType === 'video/mp4' ? 'mp4' : 'webm'}` : undefined}
