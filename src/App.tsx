@@ -476,7 +476,7 @@ export function App(){
     setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },1500);
   };
 
-  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:s)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
+  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
   const handleDragOver=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }; const handleDragLeave=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }; const handleDrop=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); const file=e.dataTransfer.files?.[0]; if(!file)return; if(!file.type.startsWith('image/')&&!file.type.startsWith('video/'))return; processMediaFile(file); };
   
   const processMediaFile=(file:File)=>{
@@ -582,22 +582,24 @@ export function App(){
     <header className="border-b border-white/5 px-3 py-2.5 safe-top"><div className="max-w-[1600px] mx-auto flex items-center justify-between"><div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#e94560] to-[#c23152] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-500/20">R</div><div><h1 className="text-base font-bold tracking-tight">{t('appTitle')}</h1><p className="text-[10px] text-white/40 hidden sm:block">{t('appSubtitle')}</p></div></div><div className="flex items-center gap-2"><span className="text-xs text-white/40">🌐</span><select className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" value={language} onChange={(e)=>setLanguage(e.target.value as Language)}>{Object.entries(LANG_NAMES).map(([code,name])=>(<option key={code} value={code} className="bg-gray-900">{name}</option>))}</select></div></div></header>
     <main className="max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-3 p-3">
       <aside className="w-full lg:w-[340px] space-y-2.5 lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto lg:pr-1 order-2 lg:order-1">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide sticky top-0 z-40 bg-[#08080f]/98 backdrop-blur-sm py-2 border-b border-white/8">{tabLabels.map((tab,i)=>(<button key={i} className={`flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap border ${activeTab===i? (i===0?'bg-blue-600 border-blue-500 shadow-blue-500/30':i===1?'bg-purple-600 border-purple-500 shadow-purple-500/30':i===2?'bg-amber-600 border-amber-500 shadow-amber-500/30':i===3?'bg-emerald-600 border-emerald-500 shadow-emerald-500/30':'bg-pink-600 border-pink-500 shadow-pink-500/30') + ' text-white shadow-lg' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'}`} onClick={()=>setActiveTab(i)}><span className="mr-1">{tab.icon}</span>{tab.label}</button>))}</div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide sticky top-0 z-40 bg-[#08080f]/98 backdrop-blur-sm py-2 border-b border-white/8 lg:overflow-x-visible lg:flex-nowrap lg:justify-between">
+          {tabLabels.map((tab,i)=>(<button key={i} className={`flex-shrink-0 lg:flex-1 lg:px-1 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap border ${activeTab===i? (i===0?'bg-blue-600 border-blue-500 shadow-blue-500/30':i===1?'bg-purple-600 border-purple-500 shadow-purple-500/30':i===2?'bg-amber-600 border-amber-500 shadow-amber-500/30':i===3?'bg-emerald-600 border-emerald-500 shadow-emerald-500/30':'bg-pink-600 border-pink-500 shadow-pink-500/30') + ' text-white shadow-lg' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'}`} onClick={()=>setActiveTab(i)}><span className="mr-1 lg:hidden">{tab.icon}</span>{tab.label}</button>))}
+        </div>
         <div className={`${activeTab===0?'block':'hidden'}`}><Section title={t('sectionData')} defaultOpen={true}>
           <div className="flex flex-col gap-2.5">
-            <div className="flex gap-5 items-center">
-              <label className="flex items-center gap-2 cursor-pointer select-none scale-125 origin-left ml-1">
+            <div className="flex items-center">
+              <label className="flex items-center cursor-pointer select-none scale-125 origin-left ml-1">
                 <input type="checkbox" checked={showLabels} onChange={(e)=>setShowLabels(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
                 <span className="text-[10px] font-bold text-white/80">{t('showLabels')}</span>
               </label>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer select-none scale-125 origin-left">
+              <div className="flex items-center ml-12">
+                <label className="flex items-center cursor-pointer select-none scale-125 origin-left">
                   <input type="checkbox" checked={showUnits} onChange={(e)=>setShowUnits(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
-                  <span className="text-[10px] font-bold text-white/80">{language==='ko'?'단위 표시':'Show Units'}</span>
+                  <span className="text-[10px] font-bold text-white/80">{language==='ko'?'단위표시':'Show Units'}</span>
                 </label>
                 <button 
                   disabled={!showUnits}
-                  className={`px-3 py-1 rounded text-xs font-bold border transition scale-125 origin-left ml-2 ${!showUnits ? 'opacity-30 cursor-not-allowed grayscale border-white/10' : 'bg-[#e94560] border-[#e94560] text-white shadow-sm'}`} 
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition scale-110 origin-left ml-8 ${!showUnits ? 'opacity-30 cursor-not-allowed grayscale border-white/10' : 'bg-[#e94560] border-[#e94560] text-white shadow-sm'}`} 
                   onClick={()=>setLabelLang(prev => prev === 'ko' ? 'en' : 'ko')}
                 >
                   {labelLang==='ko'?'한글':'영어'}
