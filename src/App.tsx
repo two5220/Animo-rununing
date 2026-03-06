@@ -833,9 +833,41 @@ export function App(){
             };
           }}/>
           {stickers.length<2&&(<button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95 mb-2" onClick={()=>stickerInputRef.current?.click()}>📎 {language==='ko'?'스티커 추가':'Add Sticker'}</button>)}
-          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2"><div className="flex items-center gap-2"><img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10"/><div className="flex-1 grid grid-cols-2 gap-1.5"><div><span className="text-[9px] text-white/30">{language==='ko'?'테두리(1~5)':'Border(1-5)'}</span><ClampedNumberInput value={st.borderWidth} min={0} max={5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-full"/></div><div className="flex flex-col items-center justify-center"><span className="text-[9px] text-white/30 mb-1">{language==='ko'?'라운드':'Round'}</span><input type="checkbox" checked={st.rounded} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,rounded:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/></div></div><input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-7 h-7 rounded cursor-pointer"/><button className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs hover:bg-red-500/30" onClick={()=>setStickers(p=>p.filter(s=>s.id!==st.id))}>✕</button></div><div className="flex gap-3 items-center pt-1 border-t border-white/5 mt-1"><div className="flex items-center gap-1.5"><input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/><span className="text-[10px] text-white/50">{t('timeSetting')}</span></div>{st.useTimeRange && (<div className="flex-1 flex gap-2"><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">S</span><ClampedNumberInput value={st.startTime || 0} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,startTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div><div className="flex-1 flex items-center gap-1"><span className="text-[8px] text-white/30">E</span><ClampedNumberInput value={st.endTime || 5} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,endTime:v}:s))} className="input-field text-[9px] text-center p-1 w-full"/></div></div>)}</div></div>))}</div>
+          {stickers.map(st=>(<div key={st.id} className="bg-white/3 rounded-lg p-2.5 space-y-2 border border-white/5 mb-2">
+            <div className="flex items-center gap-3">
+              <img src={st.url} alt="" className="w-10 h-10 object-contain rounded border border-white/10 shrink-0"/>
+              <div className="flex-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] text-white/50 font-bold whitespace-nowrap">{language==='ko'?'윤곽':'Border'}</span>
+                  <ClampedNumberInput value={st.borderWidth} min={0} max={5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderWidth:v}:s))} className="input-field text-[10px] text-center p-1 w-6 h-7"/>
+                </div>
+                <input type="color" value={st.borderColor} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,borderColor:e.target.value}:s))} className="w-6 h-6 rounded cursor-pointer bg-transparent border-0 p-0"/>
+                <label className="flex items-center gap-1 cursor-pointer select-none">
+                  <input type="checkbox" checked={st.rounded} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,rounded:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/>
+                  <span className="text-[12px] text-white/50 font-bold">{language==='ko'?'라운드':'Round'}</span>
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer select-none">
+                  <input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/>
+                  <span className="text-[12px] text-white/50 font-bold">{t('timeSetting')}</span>
+                </label>
+              </div>
+              <button className="bg-red-500/20 text-red-400 p-1.5 rounded-lg hover:bg-red-500/30 shrink-0" onClick={()=>setStickers(p=>p.filter(s=>s.id!==st.id))}>✕</button>
+            </div>
+            {st.useTimeRange && (
+              <div className="flex gap-2 pt-1 border-t border-white/5 mt-1">
+                <div className="flex-1 flex items-center gap-1.5">
+                  <span className="text-[11px] text-white/30 font-bold">START</span>
+                  <ClampedNumberInput value={st.startTime || 0} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,startTime:v}:s))} className="input-field text-[10px] text-center p-1 w-1/2 h-7"/>
+                </div>
+                <div className="flex-1 flex items-center gap-1.5">
+                  <span className="text-[11px] text-white/30 font-bold">END</span>
+                  <ClampedNumberInput value={st.endTime || 5} min={0} max={60} step={0.5} onChange={(v)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,endTime:v}:s))} className="input-field text-[10px] text-center p-1 w-1/2 h-7"/>
+                </div>
+              </div>
+            )}
+          </div>))}</div>
         </Section>
-        <Section title={t('sectionExport')}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="0.5" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
+        <Section title={t('sectionExport')}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="1" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
       </aside>
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
