@@ -309,7 +309,7 @@ export function App(){
   const [animStyle,setAnimStyle]=useState<AnimStyle>('machine'); const [animDuration,setAnimDuration]=useState(5000); const [spinCycles,setSpinCycles]=useState(3); useEffect(()=>{ CURRENT_SPIN=spinCycles; },[spinCycles]); const [showValues,setShowValues]=useState(false); const [isAnimating,setIsAnimating]=useState(false); const [animKey,setAnimKey]=useState(0); const [layoutChanging,setLayoutChanging]=useState(false);
   const [soundEnabled,setSoundEnabled]=useState(true); const [soundVolume,setSoundVolume]=useState(0.5); const [soundType,setSoundType]=useState('tick'); const activeAudioCtxRef=useRef<AudioContext|null>(null); const previewAudioCtxRef=useRef<AudioContext|null>(null);
   const [extraHoldTime, setExtraHoldTime] = useState(2);
-  const [waitBeforeAnim, setWaitBeforeAnim] = useState(0);
+  const [waitBeforeAnim, setWaitBeforeAnim] = useState(2);
   const [useWait, setUseWait] = useState(false);
   const [introEffect, setIntroEffect] = useState<IntroEffect>('fade');
   const [animEnabled,setAnimEnabled]=useState(true);
@@ -618,14 +618,11 @@ export function App(){
   // Intro Effect Style for Preview
   const introDur = 500;
   const introProg = Math.min(actualPlayElapsed / introDur, 1);
-  let previewIntroStyle: React.CSSProperties = {};
+  let previewIntroStyle: React.CSSProperties = { transform: 'translate(-50%, -50%)' };
   if(isActuallyPlaying) {
-    if(introEffect === 'fade') { previewIntroStyle = { opacity: introProg }; }
+    if(introEffect === 'fade') { previewIntroStyle = { ...previewIntroStyle, opacity: introProg }; }
     else if(introEffect === 'slide-up') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, calc(-50% + ${(1 - introProg) * 30}px))` }; }
     else if(introEffect === 'zoom-in') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, -50%) scale(${0.8 + 0.2 * introProg})` }; }
-    else { previewIntroStyle = { transform: 'translate(-50%, -50%)' }; }
-  } else {
-    previewIntroStyle = { transform: 'translate(-50%, -50%)' };
   }
 
   return(<div className="min-h-screen" style={{background:'#08080f'}}>
@@ -709,25 +706,23 @@ export function App(){
         </Section></div>
         <div className={`${activeTab===2?'block':'hidden'} space-y-2.5`}><Section title={t('sectionAnimation')} defaultOpen={true}>
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
+          
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {(animDuration/1000).toFixed(1)}s</label><input type="range" min="1000" max="10000" step="1000" className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
+          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {animDuration/1000}s</label><input type="range" min="1000" max="10000" step="1000" className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
           
           <div className="border-t border-white/10 pt-3 mt-3">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-white/60">{language==='ko'?'재생 전 대기':'Wait Before Start'}</label>
-              <button className={`w-10 h-5 rounded-full transition-colors relative border ${useWait?'bg-blue-600 border-blue-500':'bg-white/15 border-white/30'}`} onClick={()=>setUseWait(!useWait)}><span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${useWait?'left-5':'left-0.5'}`}/></button>
+              <label className="text-sm font-semibold text-white/80">{language==='ko'?'재생 전 대기':'Wait Before Start'}</label>
+              <button className={`w-12 h-6 rounded-full transition-colors relative border ${useWait?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setUseWait(!useWait)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${useWait?'left-6':'left-0.5'}`}/></button>
             </div>
             {useWait && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2"><input type="range" min="1" max="10" step="1" value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{waitBeforeAnim}s</span></div>
-                <div>
-                  <label className="text-[10px] text-white/40 block mb-1">{language==='ko'?'등장 효과':'Intro Effect'}</label>
-                  <div className="flex gap-1">
-                    {(['fade','slide-up','zoom-in','none'] as IntroEffect[]).map(eff => (
-                      <button key={eff} className={`flex-1 py-1.5 rounded-md text-[10px] font-bold border transition ${introEffect===eff?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-white/60'}`} onClick={()=>setIntroEffect(eff)}>{eff.toUpperCase()}</button>
-                    ))}
-                  </div>
+              <div className="space-y-3">
+                <div className="flex gap-1.5">
+                  {(['fade','slide-up','zoom-in','none'] as IntroEffect[]).map(eff => (
+                    <button key={eff} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${introEffect===eff?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setIntroEffect(eff)}>{t(`intro${eff.charAt(0).toUpperCase() + eff.slice(1).replace('-','')}`)}</button>
+                  ))}
                 </div>
+                <div><label className="text-xs font-medium text-white/60 mb-1 block">{language==='ko'?`대기 시간(초): ${waitBeforeAnim}s`:`Wait Time: ${waitBeforeAnim}s`}</label><input type="range" min="1" max="10" step="1" value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/></div>
               </div>
             )}
           </div>
@@ -772,7 +767,7 @@ export function App(){
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
             {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video src={bgMediaUrl} style={mediaStyle} autoPlay muted loop playsInline/>)}</div>); })()}
             
-            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: isResizing||layoutChanging ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
+            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
