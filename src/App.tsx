@@ -26,6 +26,7 @@ const THEMES = [
 ];
 
 type TextAlign = 'left' | 'center' | 'right';
+type IntroEffect = 'fade' | 'slide-up' | 'zoom-in' | 'none';
 const ANIM_DELAY = 300;
 const DEFAULT_STAGGER = 80;
 
@@ -101,7 +102,7 @@ function drawCanvasDigit(ctx: CanvasRenderingContext2D, x:number,y:number, width
   const offset=scrollPos*height; const total=10*(spinCycles+1); for(let i=0;i<total;i++){ const ny=y+height/2+i*height-offset; if(ny>y-height && ny<y+height*2){ ctx.fillText(String(i%10), x+width/2, ny); }} ctx.restore();
 }
 
-interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; }
+interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; waitBeforeAnim:number; introEffect:IntroEffect; }
 
 function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:number){
   let w=0;
@@ -117,12 +118,35 @@ function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:numb
 function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:number, cfg:SceneConfig){
   ctx.clearRect(0,0,w,h); if(cfg.greenScreen && !cfg.bgMedia){ ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,w,h); }
   if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.005*w; const cy=h/2+(cfg.bgMediaY-50)*0.005*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
+  
+  const waitMs = cfg.waitBeforeAnim * 1000;
+  if(elapsedMs < waitMs) return; // Hidden during wait time
+
+  const actualElapsed = elapsedMs - waitMs;
   const scaleX=w/cfg.previewW, scaleY=h/cfg.previewH, scale=Math.min(scaleX,scaleY);
   const baseFS=cfg.baseFontSize*scale; const digitW=baseFS*0.7, digitH=baseFS*1.35, digitGap=baseFS*0.06*(cfg.spacing/10), sepW=baseFS*0.35; const labelFS=baseFS*0.4*(cfg.labelScale/100); const labelGap=(cfg.labelGapPx-10)*scale; const suffixFS=baseFS*0.54; const metricGap=(15+cfg.spacing*3)*scale; const easingFn=EASINGS[cfg.animStyle];
   const metrics=[{label:cfg.labelDuration,value:cfg.durationStr,suffix:''},{label:cfg.labelDistance,value:cfg.distanceStr,suffix:cfg.unitKm},{label:cfg.labelPace,value:cfg.paceStr,suffix:cfg.unitPace}];
   const widths=metrics.map(m=>calcDigitsWidth(m.value,digitW,digitGap,sepW)); const blockH=(cfg.showLabels?labelFS+labelGap:0)+digitH; const centerX=(cfg.recordX/100)*w, centerY=(cfg.recordY/100)*h; const isVert=cfg.layout==='vertical';
   let totalW:number,totalH:number; if(isVert){ totalH=metrics.length*blockH+(metrics.length-1)*metricGap; totalW=Math.max(...widths);} else { totalW=widths.reduce((s,d)=>s+d,0)+(metrics.length-1)*metricGap; totalH=blockH; }
   let curX:number, curY:number; if(isVert){ curX=centerX; curY=centerY-totalH/2;} else { curX=centerX-totalW/2; curY=centerY-totalH/2; }
+
+  // Intro Effect Calculation (First 500ms of actual playback)
+  const introDur = 500;
+  const introProg = Math.min(actualElapsed / introDur, 1);
+  let globalAlpha = 1;
+  let offsetY = 0;
+  let globalScale = 1;
+
+  if(cfg.introEffect === 'fade') { globalAlpha = introProg; }
+  else if(cfg.introEffect === 'slide-up') { globalAlpha = introProg; offsetY = (1 - introProg) * 30 * scale; }
+  else if(cfg.introEffect === 'zoom-in') { globalAlpha = introProg; globalScale = 0.8 + 0.2 * introProg; }
+
+  ctx.save();
+  ctx.globalAlpha = globalAlpha;
+  ctx.translate(centerX, centerY);
+  ctx.scale(globalScale, globalScale);
+  ctx.translate(-centerX, -centerY + offsetY);
+
   metrics.forEach((m,mi)=>{
     const dw=widths[mi];
     let blockCX:number, blockTop:number;
@@ -165,7 +189,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     const chars = m.value.split('');
     chars.forEach((ch,ci)=>{
       if(/[0-9]/.test(ch)){
-        const target=parseInt(ch); const dDur=cfg.animDuration+ci*cfg.staggerDelay; const prog=Math.min(Math.max(elapsedMs,0)/dDur,1); const eased=easingFn(prog); const scroll=(cfg.spinCycles*10+target)*eased;
+        const target=parseInt(ch); const dDur=cfg.animDuration+ci*cfg.staggerDelay; const prog=Math.min(Math.max(actualElapsed,0)/dDur,1); const eased=easingFn(prog); const scroll=(cfg.spinCycles*10+target)*eased;
         drawCanvasDigit(ctx,dx,digitTop,digitW,digitH,scroll,cfg.fontFamily,baseFS,cfg.digitColor,cfg.spinCycles);
         dx+=digitW;
       } else {
@@ -183,6 +207,8 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
 
     if(isVert){ curY+=blockH+metricGap;} else { curX+=dw+metricGap; }
   });
+  ctx.restore();
+
   cfg.textOverlays.forEach(ov=>{
     ctx.save();
     ctx.translate((ov.x/100)*w, (ov.y/100)*h);
@@ -282,7 +308,10 @@ export function App(){
   const [showLabels,setShowLabels]=useState(true); const [showUnits,setShowUnits]=useState(true); const [digitColor,setDigitColor]=useState('#e94560'); const [labelColor,setLabelColor]=useState('#a0aec0'); const [metricFontSize,setMetricFontSize]=useState(100); const [labelFontSize,setLabelFontSize]=useState(105); const [metricAlign,setMetricAlign]=useState<TextAlign>('center'); const [selectedFont,setSelectedFont]=useState('Orbitron'); const [layout,setLayout]=useState<'vertical'|'horizontal'>('vertical'); const [spacing,setSpacing]=useState(3); const [labelGapValue,setLabelGapValue]=useState(4); const [recordX,setRecordX]=useState(50); const [recordY,setRecordY]=useState(50);
   const [animStyle,setAnimStyle]=useState<AnimStyle>('machine'); const [animDuration,setAnimDuration]=useState(5000); const [spinCycles,setSpinCycles]=useState(3); useEffect(()=>{ CURRENT_SPIN=spinCycles; },[spinCycles]); const [showValues,setShowValues]=useState(false); const [isAnimating,setIsAnimating]=useState(false); const [animKey,setAnimKey]=useState(0); const [layoutChanging,setLayoutChanging]=useState(false);
   const [soundEnabled,setSoundEnabled]=useState(true); const [soundVolume,setSoundVolume]=useState(0.5); const [soundType,setSoundType]=useState('tick'); const activeAudioCtxRef=useRef<AudioContext|null>(null); const previewAudioCtxRef=useRef<AudioContext|null>(null);
-  const [extraHoldTime,setExtraHoldTime]=useState(2);
+  const [extraHoldTime, setExtraHoldTime] = useState(2);
+  const [waitBeforeAnim, setWaitBeforeAnim] = useState(0);
+  const [useWait, setUseWait] = useState(false);
+  const [introEffect, setIntroEffect] = useState<IntroEffect>('fade');
   const [animEnabled,setAnimEnabled]=useState(true);
   const [stickers,setStickers]=useState<StickerData[]>([]);
   const stickerInputRef=useRef<HTMLInputElement>(null);
@@ -459,9 +488,10 @@ export function App(){
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
       if(!animEnabled){ setShowValues(true); return; }
       setIsAnimating(true);
-      if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY);}
-      setTimeout(()=>setShowValues(true),ANIM_DELAY);
-      setTimeout(()=>setIsAnimating(false),ANIM_DELAY+animDuration+DEFAULT_STAGGER*10+300);
+      const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
+      if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
+      setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
+      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
     }); });
   };
   
@@ -550,18 +580,19 @@ export function App(){
     
     setIsRecording(true); setVideoUrl(null); recorder.start(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
     
+    const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
-      setIsAnimating(true); if(animEnabled){ setTimeout(()=>setShowValues(true),ANIM_DELAY); } else { setShowValues(true); }
+      setIsAnimating(true); if(animEnabled){ setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs); } else { setShowValues(true); }
       if(soundEnabled && audioCtx && audioDest){
         setTimeout(()=>{
           playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
-        },ANIM_DELAY);
+        },ANIM_DELAY + totalWaitMs);
       }
-      setTimeout(()=>setIsAnimating(false),ANIM_DELAY+animDuration+DEFAULT_STAGGER*10+300);
+      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
     }); });
 
-    const startTime=performance.now(); const holdMs=extraHoldTime*1000; const totalMs=animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10; const previewFS=getPreviewFontSize();
-    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH };
+    const startTime=performance.now(); const holdMs=extraHoldTime*1000; const totalMs=totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10; const previewFS=getPreviewFontSize();
+    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH, waitBeforeAnim: useWait ? waitBeforeAnim : 0, introEffect };
     
     function animate(now:number){ const elapsed=now-startTime; const aElapsed=Math.max(0,elapsed-ANIM_DELAY); drawScene(ctx2,canvas.width,canvas.height,aElapsed,cfg); if(elapsed<totalMs){ requestAnimationFrame(animate);} else { recorder.stop(); if(bgVideoRef.current) bgVideoRef.current.pause(); } }
     requestAnimationFrame(animate);
@@ -578,6 +609,25 @@ export function App(){
   const tabLabels=[{icon:'📊',label:language==='ko'?'기록':t('sectionData')},{icon:'🎨',label:language==='ko'?'스타일':t('sectionStyle')},{icon:'⚡',label:language==='ko'?'효과':t('sectionAnimation')},{icon:'📝',label:language==='ko'?'텍스트':t('sectionText')},{icon:'📁',label:language==='ko'?'미디어':t('sectionMedia')}];
   const fontSize=getPreviewFontSize(); const RECORD_GAP_PX=15+spacing*3; const LABEL_GAP_PX=labelGapValue-10;
 
+  // Actual preview visibility during playback
+  const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
+  const isCurrentlyWaiting = isAnimating && previewElapsed < totalWaitMs;
+  const isActuallyPlaying = isAnimating && previewElapsed >= totalWaitMs;
+  const actualPlayElapsed = isActuallyPlaying ? previewElapsed - totalWaitMs : 0;
+
+  // Intro Effect Style for Preview
+  const introDur = 500;
+  const introProg = Math.min(actualPlayElapsed / introDur, 1);
+  let previewIntroStyle: React.CSSProperties = {};
+  if(isActuallyPlaying) {
+    if(introEffect === 'fade') { previewIntroStyle = { opacity: introProg }; }
+    else if(introEffect === 'slide-up') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, calc(-50% + ${(1 - introProg) * 30}px))` }; }
+    else if(introEffect === 'zoom-in') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, -50%) scale(${0.8 + 0.2 * introProg})` }; }
+    else { previewIntroStyle = { transform: 'translate(-50%, -50%)' }; }
+  } else {
+    previewIntroStyle = { transform: 'translate(-50%, -50%)' };
+  }
+
   return(<div className="min-h-screen" style={{background:'#08080f'}}>
     <header className="border-b border-white/5 px-3 py-2.5 safe-top"><div className="max-w-[1600px] mx-auto flex items-center justify-between"><div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#e94560] to-[#c23152] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-500/20">R</div><div><h1 className="text-base font-bold tracking-tight">{t('appTitle')}</h1><p className="text-[10px] text-white/40 hidden sm:block">{t('appSubtitle')}</p></div></div><div className="flex items-center gap-2"><span className="text-xs text-white/40">🌐</span><select className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" value={language} onChange={(e)=>setLanguage(e.target.value as Language)}>{Object.entries(LANG_NAMES).map(([code,name])=>(<option key={code} value={code} className="bg-gray-900">{name}</option>))}</select></div></div></header>
     <main className="max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-3 p-3">
@@ -590,12 +640,12 @@ export function App(){
             <div className="flex items-center">
               <label className="flex items-center cursor-pointer select-none scale-125 origin-left ml-1">
                 <input type="checkbox" checked={showLabels} onChange={(e)=>setShowLabels(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
-                <span className="text-[10px] font-bold text-white/80">{t('showLabels')}</span>
+                <span className="text-[10px] font-bold text-white/80" style={{fontFamily:selectedFont}}>{t('showLabels')}</span>
               </label>
               <div className="flex items-center ml-12">
                 <label className="flex items-center cursor-pointer select-none scale-125 origin-left">
                   <input type="checkbox" checked={showUnits} onChange={(e)=>setShowUnits(e.target.checked)} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
-                  <span className="text-[10px] font-bold text-white/80">{language==='ko'?'단위표시':'Show Units'}</span>
+                  <span className="text-[10px] font-bold text-white/80" style={{fontFamily:selectedFont}}>{language==='ko'?'단위표시':'Show Units'}</span>
                 </label>
                 <button 
                   disabled={!showUnits}
@@ -661,6 +711,26 @@ export function App(){
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {(animDuration/1000).toFixed(1)}s</label><input type="range" min="1000" max="10000" step="1000" className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
+          
+          <div className="border-t border-white/10 pt-3 mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-white/60">{language==='ko'?'재생 전 대기':'Wait Before Start'}</label>
+              <button className={`w-10 h-5 rounded-full transition-colors relative border ${useWait?'bg-blue-600 border-blue-500':'bg-white/15 border-white/30'}`} onClick={()=>setUseWait(!useWait)}><span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${useWait?'left-5':'left-0.5'}`}/></button>
+            </div>
+            {useWait && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2"><input type="range" min="1" max="10" step="1" value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{waitBeforeAnim}s</span></div>
+                <div>
+                  <label className="text-[10px] text-white/40 block mb-1">{language==='ko'?'등장 효과':'Intro Effect'}</label>
+                  <div className="flex gap-1">
+                    {(['fade','slide-up','zoom-in','none'] as IntroEffect[]).map(eff => (
+                      <button key={eff} className={`flex-1 py-1.5 rounded-md text-[10px] font-bold border transition ${introEffect===eff?'bg-blue-600 border-blue-500 text-white':'bg-white/5 border-white/10 text-white/60'}`} onClick={()=>setIntroEffect(eff)}>{eff.toUpperCase()}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </Section>
         <Section title={t('sectionSound')} defaultOpen={true}>
           <div className="flex items-center justify-between"><label className="text-sm font-semibold text-white/80">{t('soundOn')}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${soundEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setSoundEnabled(!soundEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${soundEnabled?'left-6':'left-0.5'}`}/></button></div>
@@ -702,7 +772,7 @@ export function App(){
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
             {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video src={bgMediaUrl} style={mediaStyle} autoPlay muted loop playsInline/>)}</div>); })()}
             
-            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,transform:'translate(-50%, -50%)',outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none'}}>
+            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: isResizing||layoutChanging ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
