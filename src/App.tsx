@@ -102,7 +102,7 @@ function drawCanvasDigit(ctx: CanvasRenderingContext2D, x:number,y:number, width
   const offset=scrollPos*height; const total=10*(spinCycles+1); for(let i=0;i<total;i++){ const ny=y+height/2+i*height-offset; if(ny>y-height && ny<y+height*2){ ctx.fillText(String(i%10), x+width/2, ny); }} ctx.restore();
 }
 
-interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; waitBeforeAnim:number; introEffect:IntroEffect; animEnabled: boolean; }
+interface SceneConfig { digitColor:string; labelColor:string; fontFamily:string; layout:'vertical'|'horizontal'; textAlign:TextAlign; spacing:number; recordX:number; recordY:number; baseFontSize:number; labelDuration:string; labelDistance:string; labelPace:string; unitKm:string; unitPace:string; durationStr:string; distanceStr:string; paceStr:string; showLabels:boolean; showUnits:boolean; labelScale:number; spinCycles:number; animDuration:number; staggerDelay:number; animStyle:AnimStyle; textOverlays:TextOverlay[]; emojiOverlays:EmojiOverlay[]; stickerData:StickerData[]; bgMedia: HTMLImageElement|HTMLVideoElement|null; bgMediaX:number; bgMediaY:number; bgMediaScale:number; greenScreen:boolean; labelGapPx:number; canvasW:number; canvasH:number; previewW:number; previewH:number; waitBeforeAnim:number; introEffect:IntroEffect; animEnabled: boolean; videoMuted: boolean; videoVolume: number; }
 
 function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:number){
   let w=0;
@@ -323,6 +323,9 @@ export function App(){
   const recAudioCtxRef=useRef<AudioContext|null>(null);
   const [textOverlays,setTextOverlays]=useState<TextOverlay[]>([]); const [emojiOverlays,setEmojiOverlays]=useState<EmojiOverlay[]>([]);
   const [bgMediaUrl,setBgMediaUrl]=useState<string|null>(null); const [bgMediaType,setBgMediaType]=useState<'image'|'video'>('image'); const [bgMediaScale,setBgMediaScale]=useState(100); const [bgMediaX,setBgMediaX]=useState(50); const [bgMediaY,setBgMediaY]=useState(50);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [videoVolume, setVideoVolume] = useState(1);
+  const [videoPaused, setVideoPaused] = useState(true);
   const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null); const [videoMimeType,setVideoMimeType]=useState<string|null>(null);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
   const [activeTab,setActiveTab]=useState(0); const [selectedElement,setSelectedElement]=useState<string|null>(null);
@@ -498,16 +501,42 @@ export function App(){
   const playAnimation=()=>{
     if(!animEnabled) return;
     stopAllSounds(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
+    
+    // Video Playback logic
+    if(bgMediaType==='video' && bgVideoRef.current) {
+        const vid = bgVideoRef.current;
+        vid.muted = videoMuted;
+        vid.volume = videoVolume;
+        vid.play();
+        setVideoPaused(false);
+    }
+
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
       setIsAnimating(true);
       const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
       if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
       setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
-      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
+      setTimeout(()=>{
+        setIsAnimating(false);
+        if(bgVideoRef.current) {
+            bgVideoRef.current.pause();
+            setVideoPaused(true);
+        }
+      },ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + extraHoldTime*1000);
     }); });
   };
   
-  const resetAnimation=()=>{ stopAllSounds(); setShowValues(!animEnabled); setIsAnimating(false); setAnimKey(k=>k+1); };
+  const resetAnimation=()=>{ 
+    stopAllSounds(); 
+    setShowValues(!animEnabled); 
+    setIsAnimating(false); 
+    setAnimKey(k=>k+1); 
+    if(bgVideoRef.current) {
+        bgVideoRef.current.currentTime = 0;
+        bgVideoRef.current.pause();
+        setVideoPaused(true);
+    }
+  };
   
   const previewSoundFn=(type:string)=>{
     try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{}
@@ -525,8 +554,18 @@ export function App(){
     const url=URL.createObjectURL(file);
     if(file.type.startsWith('video/')){
       setBgMediaType('video'); setBgMediaUrl(url);
-      const video=document.createElement('video'); video.src=url; video.loop=true; video.muted=true; video.playsInline=true; bgVideoRef.current=video; bgImageRef.current=null;
-      video.addEventListener('loadedmetadata',()=>{ const vw=video.videoWidth, vh=video.videoHeight; if(vw&&vh){ const short=Math.min(vw,vh); const sc=1080/short; setCustomAR({w:Math.round(vw*sc),h:Math.round(vh*sc)}); setAspectRatio('custom'); }});
+      const video=document.createElement('video'); video.src=url; video.loop=false; video.muted=videoMuted; video.playsInline=true; bgVideoRef.current=video; bgImageRef.current=null;
+      video.addEventListener('loadedmetadata',()=>{ 
+        const vw=video.videoWidth, vh=video.videoHeight; 
+        if(vw&&vh){ 
+            const short=Math.min(vw,vh); 
+            const sc=1080/short; 
+            setCustomAR({w:Math.round(vw*sc),h:Math.round(vh*sc)}); 
+            setAspectRatio('custom'); 
+        }
+        video.currentTime = 0;
+        setVideoPaused(true);
+      });
     } else {
       setBgMediaType('image'); setBgMediaUrl(url);
       const img=new Image(); img.src=url; bgImageRef.current=img; bgVideoRef.current=null;
@@ -571,7 +610,7 @@ export function App(){
       spinCycles: 0, animDuration: 0, staggerDelay: 0, animStyle: 'default',
       textOverlays, emojiOverlays, stickerData, bgMedia, bgMediaX, bgMediaY, bgMediaScale, greenScreen,
       labelGapPx: labelGapValue, canvasW: dims.w, canvasH: dims.h, previewW, previewH,
-      waitBeforeAnim: 0, introEffect: 'none', animEnabled: false
+      waitBeforeAnim: 0, introEffect: 'none', animEnabled: false, videoMuted: true, videoVolume: 0
     };
 
     drawScene(ctx2, canvas.width, canvas.height, 100000, cfg);
@@ -586,12 +625,12 @@ export function App(){
     await document.fonts.ready;
     const dims=getExportDims(); const canvas=document.createElement('canvas'); canvas.width=dims.w; canvas.height=dims.h; const ctx2=canvas.getContext('2d')!;
     const previewRect=previewContainerRef.current?.getBoundingClientRect(); const previewW=previewRect?.width||500; const previewH=previewRect?.height||500;
-    const canvasStream=(canvas as any).captureStream(30) as MediaStream;
+    const canvasStream=(canvas as any).captureStream(60) as MediaStream;
     
     let audioCtx:AudioContext|null=null; let audioDest:MediaStreamAudioDestinationNode|null=null;
     let finalStream = canvasStream;
 
-    if(soundEnabled && animEnabled){
+    if((soundEnabled && animEnabled) || (bgMediaType==='video' && !videoMuted)) {
       try{
         audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
         await audioCtx.resume();
@@ -607,6 +646,15 @@ export function App(){
         noise.connect(audioDest);
         noise.start();
 
+        if(bgMediaType==='video' && !videoMuted && bgVideoRef.current) {
+            const vidNode = audioCtx.createMediaElementSource(bgVideoRef.current);
+            const gain = audioCtx.createGain();
+            gain.gain.value = videoVolume;
+            vidNode.connect(gain);
+            gain.connect(audioDest);
+            gain.connect(audioCtx.destination);
+        }
+
         if (audioDest.stream.getAudioTracks().length > 0) {
           finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
         }
@@ -614,12 +662,10 @@ export function App(){
       }catch(e){ console.warn('Audio capture failed:',e);}
     }
 
-    const preferredTypes = isSamsungBrowser
-      ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
-      : ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+    const preferredTypes = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=h264', 'video/webm;codecs=vp9,opus', 'video/webm'];
     const mimeType = preferredTypes.find(t2 => (window as any).MediaRecorder && MediaRecorder.isTypeSupported(t2)) || 'video/webm';
     
-    const recorder=new MediaRecorder(finalStream,{mimeType,videoBitsPerSecond:50_000_000, audioBitsPerSecond:192_000}); const chunks:Blob[]=[];
+    const recorder=new MediaRecorder(finalStream,{mimeType,videoBitsPerSecond:100_000_000, audioBitsPerSecond:320_000}); const chunks:Blob[]=[];
     recorder.ondataavailable=(e)=>{ if(e.data.size>0)chunks.push(e.data); };
     recorder.onstop=async()=>{
       const containerType = mimeType.split(';')[0];
@@ -637,36 +683,32 @@ export function App(){
         const img=new Image(); img.crossOrigin='anonymous'; img.src=bgMediaUrl; 
         await new Promise<void>(res=>{ img.onload=()=>res(); img.onerror=()=>res(); }); bgMedia=img; 
     } else if(bgMediaUrl&&bgMediaType==='video'&&bgVideoRef.current){ 
-        bgVideoRef.current.currentTime=0; bgVideoRef.current.play(); bgMedia=bgVideoRef.current; 
+        bgVideoRef.current.play(); bgMedia=bgVideoRef.current; 
     }
     
     setIsRecording(true); setVideoUrl(null); recorder.start(); setShowValues(!animEnabled); setIsAnimating(animEnabled); setAnimKey(k=>k+1);
     
     const totalWaitMs = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
     if(animEnabled) {
-      requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
-        setIsAnimating(true); 
-        setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
-        if(soundEnabled && audioCtx && audioDest){
-          setTimeout(()=>{
-            playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
-          },ANIM_DELAY + totalWaitMs);
-        }
-        setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
-      }); });
+      setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
+      if(soundEnabled && audioCtx && audioDest){
+        setTimeout(()=>{
+          playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
+        },ANIM_DELAY + totalWaitMs);
+      }
+      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
     }
 
     const startTime=performance.now(); 
     const holdMs=extraHoldTime*1000; 
-    let totalMs = animEnabled ? (totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10) : 3000; // Default 3s if no anim
+    let totalMs = animEnabled ? (totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10) : 3000;
     
-    // If video background and no anim, record for video length
     if(!animEnabled && bgMediaType==='video' && bgVideoRef.current) {
-        totalMs = bgVideoRef.current.duration * 1000;
+        totalMs = (bgVideoRef.current.duration - bgVideoRef.current.currentTime) * 1000;
     }
 
     const previewFS=getPreviewFontSize();
-    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH, waitBeforeAnim: (animEnabled && useWait) ? waitBeforeAnim : 0, introEffect, animEnabled };
+    const cfg:SceneConfig={ digitColor,labelColor,fontFamily:selectedFont, layout,textAlign:metricAlign,spacing,recordX,recordY, baseFontSize:previewFS, labelDuration:lblDuration,labelDistance:lblDistance,labelPace:lblPace, unitKm,unitPace,durationStr,distanceStr:distStr,paceStr, showLabels,showUnits,labelScale:labelFontSize,spinCycles,animDuration, staggerDelay:DEFAULT_STAGGER,animStyle, textOverlays,emojiOverlays,stickerData,bgMedia,bgMediaX,bgMediaY,bgMediaScale,greenScreen, labelGapPx:labelGapValue, canvasW:dims.w,canvasH:dims.h, previewW,previewH, waitBeforeAnim: (animEnabled && useWait) ? waitBeforeAnim : 0, introEffect, animEnabled, videoMuted, videoVolume };
     
     function animate(now:number){ 
         const elapsed=now-startTime; 
@@ -703,6 +745,19 @@ export function App(){
     else if(introEffect === 'slide-up') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, calc(-50% + ${(1 - introProg) * 30}px))` }; }
     else if(introEffect === 'zoom-in') { previewIntroStyle = { opacity: introProg, transform: `translate(-50%, -50%) scale(${0.8 + 0.2 * introProg})` }; }
   }
+
+  const handleVideoToggle = () => {
+    if(bgVideoRef.current) {
+        if(bgVideoRef.current.paused) {
+            bgVideoRef.current.play();
+            setVideoPaused(false);
+        } else {
+            bgVideoRef.current.pause();
+            setVideoPaused(true);
+        }
+    }
+  };
+  const handleVideoStop = () => { if(bgVideoRef.current) { bgVideoRef.current.pause(); bgVideoRef.current.currentTime = 0; setVideoPaused(true); } };
 
   return(<div className="min-h-screen" style={{background:'#08080f'}}>
     <header className="border-b border-white/5 px-3 py-2.5 safe-top"><div className="max-w-[1600px] mx-auto flex items-center justify-between"><div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#e94560] to-[#c23152] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-500/20">R</div><div><h1 className="text-base font-bold tracking-tight">{t('appTitle')}</h1><p className="text-[10px] text-white/40 hidden sm:block">{t('appSubtitle')}</p></div></div><div className="flex items-center gap-2"><span className="text-xs text-white/40">🌐</span><select className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" value={language} onChange={(e)=>setLanguage(e.target.value as Language)}>{Object.entries(LANG_NAMES).map(([code,name])=>(<option key={code} value={code} className="bg-gray-900">{name}</option>))}</select></div></div></header>
@@ -821,14 +876,30 @@ export function App(){
         <div className={`${activeTab===4?'block':'hidden'} space-y-2.5`}><Section title={t('sectionMedia')}>
           <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaUpload}/>
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={()=>mediaInputRef.current?.click()}>📁 {t('uploadMedia')}</button>
-          {bgMediaUrl&&(<div className="space-y-2 mt-2"><button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button></div>)}
+          {bgMediaUrl&&(
+            <div className="space-y-3 mt-2">
+                <button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button>
+                {bgMediaType==='video' && (
+                    <div className="bg-white/5 p-3 rounded-xl space-y-3 border border-white/10">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-semibold text-white/80">{t('vidMute')}</label>
+                            <button className={`w-12 h-6 rounded-full transition-colors relative border ${videoMuted?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setVideoMuted(!videoMuted)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${videoMuted?'left-6':'left-0.5'}`}/></button>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-white/60 mb-1 block">{t('vidVolume')}: {Math.round(videoVolume*100)}%</label>
+                            <input type="range" min="0" max="1" step="0.05" disabled={videoMuted} value={videoVolume} onChange={(e)=>setVideoVolume(Number(e.target.value))} className="thumb-only-slider"/>
+                        </div>
+                    </div>
+                )}
+            </div>
+          )}
           <div className="border-t border-white/10 pt-3 mt-3"><label className="text-xs font-medium text-white/60 mb-2 block">🖼️ {language==='ko'?'스티커 이미지 (최대 2장)':'Sticker Image (max 2)'}</label>
           <input ref={stickerInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{
             const file=e.target.files?.[0]; if(!file||stickers.length>=2)return;
             const url=URL.createObjectURL(file);
             const img=new Image(); img.src=url;
             img.onload=()=>{
-                setStickers(p=>[...p, {id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: 5, rounded: false}]);
+                setStickers(p=>[...p, {id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: (waitBeforeAnim + (animDuration/1000) + extraHoldTime), rounded: false}]);
                 if(stickerInputRef.current)stickerInputRef.current.value='';
             };
           }}/>
@@ -847,7 +918,11 @@ export function App(){
                   <span className="text-[12px] text-white/50 font-bold">{language==='ko'?'라운드':'Round'}</span>
                 </label>
                 <label className="flex items-center gap-1 cursor-pointer select-none">
-                  <input type="checkbox" checked={st.useTimeRange} onChange={(e)=>setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:e.target.checked}:s))} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/>
+                  <input type="checkbox" checked={st.useTimeRange} onChange={(e)=>{
+                    const checked = e.target.checked;
+                    const defaultEnd = waitBeforeAnim + (animDuration / 1000) + extraHoldTime;
+                    setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:checked, endTime: checked ? defaultEnd : s.endTime}:s));
+                  }} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/>
                   <span className="text-[12px] text-white/50 font-bold">{t('timeSetting')}</span>
                 </label>
               </div>
@@ -872,7 +947,7 @@ export function App(){
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video src={bgMediaUrl} style={mediaStyle} autoPlay muted loop playsInline/>)}</div>); })()}
+            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
@@ -895,6 +970,17 @@ export function App(){
             {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
+          
+          {bgMediaUrl && bgMediaType === 'video' && (
+            <div className="flex items-center justify-center gap-4 mt-4 py-2 border-t border-white/5">
+                <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoToggle} title={videoPaused ? t('vidPlay') : t('vidPause')}>
+                    <span className="text-2xl">{videoPaused ? '▶' : 'Ⅱ'}</span>
+                </button>
+                <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoStop} title={t('vidStop')}><span className="text-2xl">■</span></button>
+                <div className="h-4 w-[1px] bg-white/10 mx-2"/>
+                <span className="text-[10px] font-mono text-white/40">{bgVideoRef.current ? `${bgVideoRef.current.currentTime.toFixed(1)}s / ${bgVideoRef.current.duration.toFixed(1)}s` : '0.0s / 0.0s'}</span>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-4 lg:grid-cols-2 gap-2.5 max-w-md mx-auto">
           <button className="w-full h-9 rounded-xl font-bold text-sm lg:text-xl bg-[#e94560] text-white active:scale-95 disabled:opacity-40" onClick={playAnimation} disabled={isAnimating||isRecording||!animEnabled}>{t('play')}</button>

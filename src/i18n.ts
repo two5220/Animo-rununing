@@ -105,7 +105,12 @@ export const translations: Record<Language, Record<TKey, string>> = {
     introFade: 'Fade',
     introSlide: 'Slide',
     introZoom: 'Zoom',
-    introNone: 'None'
+    introNone: 'None',
+    vidPlay: 'Play',
+    vidPause: 'Pause',
+    vidStop: 'Stop',
+    vidMute: 'Mute Video',
+    vidVolume: 'Video Volume'
   },
   ko: {
     appTitle: 'RunViz',
@@ -201,7 +206,12 @@ export const translations: Record<Language, Record<TKey, string>> = {
     introFade: '페이드',
     introSlide: '슬라이드',
     introZoom: '줌',
-    introNone: '없음'
+    introNone: '없음',
+    vidPlay: '재생',
+    vidPause: '일시정지',
+    vidStop: '정지',
+    vidMute: '원본 음소거',
+    vidVolume: '동영상 볼륨'
   },
   hi: {
     appTitle: 'RunViz',
@@ -297,7 +307,12 @@ export const translations: Record<Language, Record<TKey, string>> = {
     introFade: '페이드',
     introSlide: '슬라이드',
     introZoom: '줌',
-    introNone: '없음'
+    introNone: '없음',
+    vidPlay: '재생',
+    vidPause: '일시정지',
+    vidStop: '정지',
+    vidMute: '원본 음소거',
+    vidVolume: '동영상 볼륨'
   },
   ja: {
     appTitle: 'RunViz',
@@ -306,7 +321,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     sectionStyle: 'スタイル＆テーマ',
     sectionAnimation: 'アニメーション',
     sectionSound: 'サウンド効果',
-    sectionText: '텍스트 오버레이',
+    sectionText: 'テキストオーバー레이',
     sectionEmoji: '絵文字＆アイコン',
     sectionMedia: '背景メディア',
     sectionExport: 'エクスポート',
@@ -324,9 +339,9 @@ export const translations: Record<Language, Record<TKey, string>> = {
     english: 'English',
     korean: '한국어',
     font: 'フォント',
-    digitBg: '数字背景',
-    digitColor: '数字色',
-    labelColor: 'ラベル色',
+    digitBg: '숫자 배경',
+    digitColor: '숫자 색상',
+    labelColor: '라벨 색상',
     bgColor: '背景色',
     theme: 'クイックテーマ',
     layout: 'レイアウト',
@@ -371,12 +386,12 @@ export const translations: Record<Language, Record<TKey, string>> = {
     reset: '↺ リセット',
     record: '⏺ 녹화',
     recording: '⏺ 録화 중...',
-    download: '⬇ 다운로드',
+    download: '⬇ ダウン로드',
     share: '🔗 シェア',
-    processing: '처리 중...',
+    processing: '処理中...',
     ready: '動画準備完了！',
     date: '日付',
-    appLanguage: '앱 언어',
+    appLanguage: 'アプリ言語',
     showLabels: 'ラベル表示',
     showUnits: '単位表示',
     metricSize: 'サイズ',
@@ -393,7 +408,12 @@ export const translations: Record<Language, Record<TKey, string>> = {
     introFade: 'フェード',
     introSlide: 'スライド',
     introZoom: 'ズーム',
-    introNone: 'なし'
+    introNone: 'なし',
+    vidPlay: '再生',
+    vidPause: '一時停止',
+    vidStop: '停止',
+    vidMute: '元のミュート',
+    vidVolume: '動画音量'
   },
   zh: {
     appTitle: 'RunViz',
@@ -488,6 +508,11 @@ export const translations: Record<Language, Record<TKey, string>> = {
     introFade: '淡入',
     introSlide: '滑入',
     introZoom: '缩放',
-    introNone: '无'
+    introNone: '无',
+    vidPlay: '播放',
+    vidPause: '暂停',
+    vidStop: '停止',
+    vidMute: '原音静音',
+    vidVolume: '视频音量'
   },
 };
