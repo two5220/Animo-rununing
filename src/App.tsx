@@ -117,7 +117,7 @@ function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:numb
 
 function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:number, cfg:SceneConfig){
   ctx.clearRect(0,0,w,h); if(cfg.greenScreen && !cfg.bgMedia){ ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,w,h); }
-  if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.005*w; const cy=h/2+(cfg.bgMediaY-50)*0.005*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
+  if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.01*w; const cy=h/2+(cfg.bgMediaY-50)*0.01*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
   
   const waitMs = cfg.animEnabled ? cfg.waitBeforeAnim * 1000 : 0;
   if(cfg.animEnabled && elapsedMs < waitMs) return; // Hidden during wait time if anim enabled
@@ -246,15 +246,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     if(st.rounded){
         const r = Math.min(finalW, finalH) * 0.15;
         ctx.beginPath();
-        ctx.moveTo(-finalW/2+r, -finalH/2);
-        ctx.lineTo(finalW/2-r, -finalH/2);
-        ctx.quadraticCurveTo(finalW/2, -finalH/2, finalW/2, -finalH/2+r);
-        ctx.lineTo(finalW/2, finalH/2-r);
-        ctx.quadraticCurveTo(finalW/2, finalH/2, finalW/2-r, finalH/2);
-        ctx.lineTo(-finalW/2+r, finalH/2);
-        ctx.quadraticCurveTo(-finalW/2, finalH/2, -finalW/2, finalH/2-r);
-        ctx.lineTo(-finalW/2, -finalH/2+r);
-        ctx.quadraticCurveTo(-finalW/2, -finalH/2, -finalW/2+r, -finalH/2);
+        ctx.roundRect(-finalW/2, -finalH/2, finalW, finalH, r);
         ctx.closePath();
         ctx.clip();
     }
@@ -271,16 +263,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
       if(st.rounded){
           const r = Math.min(finalW, finalH) * 0.15;
           ctx.beginPath();
-          ctx.moveTo(-finalW/2+r, -finalH/2);
-          ctx.lineTo(finalW/2-r, -finalH/2);
-          ctx.quadraticCurveTo(finalW/2, -finalH/2, finalW/2, -finalH/2+r);
-          ctx.lineTo(finalW/2, finalH/2-r);
-          ctx.quadraticCurveTo(finalW/2, finalH/2, finalW/2-r, finalH/2);
-          ctx.lineTo(-finalW/2+r, finalH/2);
-          ctx.quadraticCurveTo(-finalW/2, finalH/2, -finalW/2, finalH/2-r);
-          ctx.lineTo(-finalW/2, -finalH/2+r);
-          ctx.quadraticCurveTo(-finalW/2, -finalH/2, -finalW/2+r, -finalH/2);
-          ctx.closePath();
+          ctx.roundRect(-finalW/2, -finalH/2, finalW, finalH, r);
           ctx.stroke();
       } else {
           ctx.strokeRect(-finalW/2, -finalH/2, finalW, finalH);
@@ -323,6 +306,7 @@ export function App(){
   const recAudioCtxRef=useRef<AudioContext|null>(null);
   const [textOverlays,setTextOverlays]=useState<TextOverlay[]>([]); const [emojiOverlays,setEmojiOverlays]=useState<EmojiOverlay[]>([]);
   const [bgMediaUrl,setBgMediaUrl]=useState<string|null>(null); const [bgMediaType,setBgMediaType]=useState<'image'|'video'>('image'); const [bgMediaScale,setBgMediaScale]=useState(100); const [bgMediaX,setBgMediaX]=useState(50); const [bgMediaY,setBgMediaY]=useState(50);
+  const [bgEnlargeEnabled, setBgEnlargeEnabled] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [videoVolume, setVideoVolume] = useState(1);
   const [videoPaused, setVideoPaused] = useState(true);
@@ -361,7 +345,7 @@ export function App(){
     origX: 0, origY: 0,
     origSize: 0, origRotation: 0,
     initialDist: 0, initialAngle: 0,
-    type: '' as 'record' | 'text' | 'emoji' | 'sticker',
+    type: '' as 'record' | 'text' | 'emoji' | 'sticker' | 'bg',
     id: ''
   });
 
@@ -370,6 +354,8 @@ export function App(){
   const textOverlaysRef = useRef<TextOverlay[]>([]); textOverlaysRef.current = textOverlays;
   const emojiOverlaysRef = useRef<EmojiOverlay[]>([]); emojiOverlaysRef.current = emojiOverlays;
   const metricFontSizeRef = useRef(100); metricFontSizeRef.current = metricFontSize;
+  const bgMediaStateRef = useRef({ x: 50, y: 50, scale: 100 });
+  bgMediaStateRef.current = { x: bgMediaX, y: bgMediaY, scale: bgMediaScale };
 
   useEffect(()=>{ const onKey=(e:KeyboardEvent)=>{ if(!selectedElement)return; const tag=(e.target as HTMLElement)?.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return; if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null);} }; window.addEventListener('keydown',onKey); return()=>window.removeEventListener('keydown',onKey); },[selectedElement]);
 
@@ -388,6 +374,7 @@ export function App(){
       let id = '';
 
       if(sel === 'record') { ox=recordX; oy=recordY; os=metricFontSizeRef.current; }
+      else if(sel === 'bg') { ox=bgMediaStateRef.current.x; oy=bgMediaStateRef.current.y; os=bgMediaStateRef.current.scale; type='bg'; }
       else if(sel.startsWith('text-')) { id=sel.replace('text-',''); const f=textOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.fontSize;or=f.rotation;} type='text'; }
       else if(sel.startsWith('emoji-')) { id=sel.replace('emoji-',''); const f=emojiOverlaysRef.current.find(o=>o.id===id); if(f){ox=f.x;oy=f.y;os=f.size;or=f.rotation;} type='emoji'; }
       else if(sel.startsWith('sticker-')) { id=sel.replace('sticker-',''); const f=stickersRef.current.find(s=>s.id===id); if(f){ox=f.x;oy=f.y;os=f.size;or=f.rotation;} type='sticker'; }
@@ -413,23 +400,25 @@ export function App(){
         const angle = getAngle(touches[0], touches[1]);
         const scale = dist / ir.initialDist;
         const angleDiff = angle - ir.initialAngle;
-        const nextSize = Math.max(10, Math.min(500, Math.round(ir.origSize * scale)));
+        const nextSize = Math.max(ir.type === 'bg' ? 100 : 10, Math.min(500, Math.round(ir.origSize * scale)));
         markResizing();
 
         if(ir.type === 'record') setMetricFontSize(nextSize);
+        else if(ir.type === 'bg') setBgMediaScale(nextSize);
         else if(ir.type === 'text') setTextOverlays(p => p.map(o => o.id === ir.id ? { ...o, fontSize: nextSize, rotation: ir.origRotation + angleDiff } : o));
         else if(ir.type === 'emoji') setEmojiOverlays(p => p.map(o => o.id === ir.id ? { ...o, size: nextSize, rotation: ir.origRotation + angleDiff } : o));
         else if(ir.type === 'sticker') setStickers(p => p.map(s => s.id === ir.id ? { ...s, size: nextSize, rotation: ir.origRotation + angleDiff } : s));
       } else if(ir.mode === 'drag') {
         const dx = clientX - ir.startX;
         const dy = clientY - ir.startY;
-        const nx = Math.max(0, Math.min(100, ir.origX + (dx / rect.width) * 100));
-        const ny = Math.max(0, Math.min(100, ir.origY + (dy / rect.height) * 100));
+        const nx = Math.max(-100, Math.min(200, ir.origX + (dx / rect.width) * 100)); // Loosened constraints for BG
+        const ny = Math.max(-100, Math.min(200, ir.origY + (dy / rect.height) * 100));
 
-        if(ir.type === 'record') { setRecordX(Math.round(nx * 10) / 10); setRecordY(Math.round(ny * 10) / 10); }
-        else if(ir.type === 'text') setTextOverlays(p => p.map(o => o.id === ir.id ? { ...o, x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } : o));
-        else if(ir.type === 'emoji') setEmojiOverlays(p => p.map(o => o.id === ir.id ? { ...o, x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } : o));
-        else if(ir.type === 'sticker') setStickers(p => p.map(s => s.id === ir.id ? { ...s, x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } : s));
+        if(ir.type === 'record') { setRecordX(Math.round(Math.max(0, Math.min(100, nx)) * 10) / 10); setRecordY(Math.round(Math.max(0, Math.min(100, ny)) * 10) / 10); }
+        else if(ir.type === 'bg') { setBgMediaX(Math.round(nx * 10) / 10); setBgMediaY(Math.round(ny * 10) / 10); }
+        else if(ir.type === 'text') setTextOverlays(p => p.map(o => o.id === ir.id ? { ...o, x: Math.round(Math.max(0, Math.min(100, nx)) * 10) / 10, y: Math.round(Math.max(0, Math.min(100, ny)) * 10) / 10 } : o));
+        else if(ir.type === 'emoji') setEmojiOverlays(p => p.map(o => o.id === ir.id ? { ...o, x: Math.round(Math.max(0, Math.min(100, nx)) * 10) / 10, y: Math.round(Math.max(0, Math.min(100, ny)) * 10) / 10 } : o));
+        else if(ir.type === 'sticker') setStickers(p => p.map(s => s.id === ir.id ? { ...s, x: Math.round(Math.max(0, Math.min(100, nx)) * 10) / 10, y: Math.round(Math.max(0, Math.min(100, ny)) * 10) / 10 } : s));
       }
     };
 
@@ -447,7 +436,7 @@ export function App(){
         e.preventDefault();
         const id = item.getAttribute('data-id');
         const type = item.getAttribute('data-type');
-        const sel = type === 'record' ? 'record' : `${type}-${id}`;
+        const sel = type === 'record' ? 'record' : type === 'bg' ? 'bg' : `${type}-${id}`;
         if (selectedElementRef.current !== sel) {
           setSelectedElement(sel);
         }
@@ -547,7 +536,7 @@ export function App(){
     setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },1500);
   };
 
-  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
+  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement==='bg'){ setBgMediaScale(p=>Math.max(100,Math.min(500,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
   const handleDragOver=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }; const handleDragLeave=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }; const handleDrop=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); const file=e.dataTransfer.files?.[0]; if(!file)return; if(!file.type.startsWith('image/')&&!file.type.startsWith('video/'))return; processMediaFile(file); };
   
   const processMediaFile=(file:File)=>{
@@ -720,7 +709,7 @@ export function App(){
   };
 
   const handleMediaUpload=(e:React.ChangeEvent<HTMLInputElement>)=>{ const file=e.target.files?.[0]; if(!file)return; processMediaFile(file); };
-  const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); };
+  const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); setBgEnlargeEnabled(false); };
   const deleteSelected=()=>{ if(!selectedElement)return; if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null); };
   const addTextOverlay=()=>{ setTextOverlays(p=>[...p,{id:uid(),text:new Date().toLocaleDateString(),x:50,y:90,fontSize:16,color:labelColor,fontFamily:selectedFont, rotation: 0}]); };
   const updateTextOverlay=(id:string,field:keyof TextOverlay,value:string|number)=>{ setTextOverlays(p=>p.map(o=>o.id===id?{...o,[field]:value}:o)); };
@@ -792,7 +781,7 @@ export function App(){
             <label className="text-xs font-medium text-white/60 mb-1 block">{t('duration')}</label>
             <div className="flex gap-2"><div className="flex-1"><input type="number" min="0" max="99" className="input-field text-center" value={hours} onChange={(e)=>setHours(e.target.value)} placeholder={t('hours')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('hours')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={minutes} onChange={(e)=>setMinutes(e.target.value)} placeholder={t('minutes')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('minutes')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={seconds} onChange={(e)=>setSeconds(e.target.value)} placeholder={t('seconds')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('seconds')}</span></div></div>
           </div>
-          <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setPaceSec(e.target.value)} /></div></div></div>
+          <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setSeconds(e.target.value)} /></div></div></div>
         </Section></div>
         <div className={`${activeTab===1?'block':'hidden'}`}><Section title={t('sectionStyle')}>
           <div>
@@ -858,6 +847,12 @@ export function App(){
               <div><label className="text-xs font-medium text-white/60 mb-1 block">{language==='ko'?`대기 시간(초): ${waitBeforeAnim}s`:`Wait Time: ${waitBeforeAnim}s`}</label><input type="range" min="1" max="10" step="1" disabled={!useWait} value={waitBeforeAnim} onChange={(e)=>setWaitBeforeAnim(Number(e.target.value))} className="flex-1 thumb-only-slider"/></div>
             </div>
           </div>
+          <div className="border-t border-white/10 pt-3">
+            <label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min="0" max="10" step="1" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span>
+            </div>
+          </div>
         </Section>
         <Section title={t('sectionSound')}>
           <div className="flex items-center justify-between"><label className="text-sm font-semibold text-white/80">{t('soundOn')}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${soundEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setSoundEnabled(!soundEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${soundEnabled?'left-6':'left-0.5'}`}/></button></div>
@@ -878,7 +873,13 @@ export function App(){
           <button className="w-full py-3 rounded-xl font-semibold text-sm bg-white/15 hover:bg-white/25 text-white border border-white/30 transition active:scale-95" onClick={()=>mediaInputRef.current?.click()}>📁 {t('uploadMedia')}</button>
           {bgMediaUrl&&(
             <div className="space-y-3 mt-2">
-                <button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg w-full" onClick={removeMedia}>✕ {t('removeMedia')}</button>
+                <div className="flex items-center gap-2">
+                    <label className="flex flex-1 items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
+                        <input type="checkbox" checked={bgEnlargeEnabled} onChange={(e)=>{ setBgEnlargeEnabled(e.target.checked); if(e.target.checked) setSelectedElement('bg'); else if(selectedElement==='bg') setSelectedElement(null); }} className="w-4 h-4 rounded accent-[#e94560] cursor-pointer" />
+                        <span className="text-[11px] font-bold text-white/80">{t('bgEnlarge')}</span>
+                    </label>
+                    <button className="bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg" onClick={removeMedia}>✕ {t('removeMedia')}</button>
+                </div>
                 {bgMediaType==='video' && (
                     <div className="bg-white/5 p-3 rounded-xl space-y-3 border border-white/10">
                         <div className="flex items-center justify-between">
@@ -942,12 +943,12 @@ export function App(){
             )}
           </div>))}</div>
         </Section>
-        <Section title={t('sectionExport')}><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('extraHold')}</label><div className="flex items-center gap-2"><input type="range" min="0" max="10" step="1" value={extraHoldTime} onChange={(e)=>setExtraHoldTime(Number(e.target.value))} className="flex-1 thumb-only-slider"/><span className="text-xs text-white/40">{extraHoldTime}s</span></div></div><div className="bg-white/3 rounded-lg p-2.5 border border-white/5 mt-2"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
+        <Section title={t('sectionExport')}><div className="bg-white/3 rounded-lg p-2.5 border border-white/5"><div className="flex items-center justify-between mb-1.5"><span className="text-sm font-semibold text-white/80">🟢 {t('greenScreen')}</span><button className={`w-12 h-6 rounded-full transition-colors relative border ${greenScreen?'bg-green-500 border-green-500':'bg-white/15 border-white/30'}`} onClick={()=>setGreenScreen(!greenScreen)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${greenScreen?'left-6':'left-0.5'}`}/></button></div></div></Section></div>
       </aside>
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*0.5; const ty=(bgMediaY-50)*0.5; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className="absolute inset-0 pointer-events-none" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
+            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*1.0; const ty=(bgMediaY-50)*1.0; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden', outline: (bgEnlargeEnabled && selectedElement==='bg') ? '2px dashed #e94560' : 'none', outlineOffset: '-4px'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
@@ -967,7 +968,15 @@ export function App(){
                 return (<div key={st.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 ${st.rounded ? 'rounded-[15%]' : ''}`} data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none', overflow:st.rounded?'hidden':'visible'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>);
             })}
 
-            {selectedElement&&selectedElement!=='record'&&( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
+            {bgEnlargeEnabled && (
+                <div className="absolute top-3 left-3 z-50">
+                    <button className="bg-[#e94560] text-white px-3 py-1 rounded-lg text-xs font-bold shadow-lg flex items-center gap-1 active:scale-95" onClick={() => { setBgEnlargeEnabled(false); if(selectedElement==='bg') setSelectedElement(null); }}>
+                        📌 {t('fix')}
+                    </button>
+                </div>
+            )}
+
+            {selectedElement && !['record','bg'].includes(selectedElement) && ( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
           

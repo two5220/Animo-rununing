@@ -99,7 +99,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     alignCenter: 'Center',
     alignRight: 'Right',
     spinSpeed: 'Rotation Speed',
-    extraHold: 'Animation post-video time',
+    extraHold: 'Maintain after playback',
     sec: 'sec',
     timeSetting: 'Time Range',
     introFade: 'Fade',
@@ -110,7 +110,9 @@ export const translations: Record<Language, Record<TKey, string>> = {
     vidPause: 'Pause',
     vidStop: 'Stop',
     vidMute: 'Mute Video',
-    vidVolume: 'Video Volume'
+    vidVolume: 'Video Volume',
+    bgEnlarge: 'Resize Bg',
+    fix: 'Fix'
   },
   ko: {
     appTitle: 'RunViz',
@@ -200,7 +202,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     alignCenter: '중앙',
     alignRight: '오른쪽',
     spinSpeed: '회전 속도',
-    extraHold: '애니메이션 이후 추가 영상 시간',
+    extraHold: '재생 후 유지',
     sec: '초',
     timeSetting: '시간',
     introFade: '페이드',
@@ -211,7 +213,9 @@ export const translations: Record<Language, Record<TKey, string>> = {
     vidPause: '일시정지',
     vidStop: '정지',
     vidMute: '원본 음소거',
-    vidVolume: '동영상 볼륨'
+    vidVolume: '동영상 볼륨',
+    bgEnlarge: '크기 조절',
+    fix: '고정'
   },
   hi: {
     appTitle: 'RunViz',
@@ -219,7 +223,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     sectionData: 'दौड़ 데이터',
     sectionStyle: '스타일 및 테마',
     sectionAnimation: '애니메이션',
-    sectionSound: 'ध्वनि प्रभाव',
+    sectionSound: 'ध्व니 प्रभाव',
     sectionText: '텍스트 오버레이',
     sectionEmoji: '이모지 및 아이콘',
     sectionMedia: '배경 미디어',
@@ -301,7 +305,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     alignCenter: '중앙',
     alignRight: '오른쪽',
     spinSpeed: '회전 속도',
-    extraHold: '애니메이션 이후 추가 영상 시간',
+    extraHold: 'Maintain after playback',
     sec: '초',
     timeSetting: '시간',
     introFade: '페이드',
@@ -312,7 +316,9 @@ export const translations: Record<Language, Record<TKey, string>> = {
     vidPause: '일시정지',
     vidStop: '정지',
     vidMute: '원본 음소거',
-    vidVolume: '동영상 볼륨'
+    vidVolume: '동영상 볼륨',
+    bgEnlarge: 'Resize Bg',
+    fix: 'Fix'
   },
   ja: {
     appTitle: 'RunViz',
@@ -321,7 +327,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     sectionStyle: 'スタイル＆テーマ',
     sectionAnimation: 'アニメーション',
     sectionSound: 'サウンド効果',
-    sectionText: 'テキストオーバー레이',
+    sectionText: '텍스트 오버레이',
     sectionEmoji: '絵文字＆アイコン',
     sectionMedia: '背景メディア',
     sectionExport: 'エクスポート',
@@ -396,13 +402,13 @@ export const translations: Record<Language, Record<TKey, string>> = {
     showUnits: '単位表示',
     metricSize: 'サイズ',
     labelSize: 'ラベル',
-    spacing: '間隔',
+    spacing: '間격',
     textAlign: 'テキスト配置',
     alignLeft: '左',
     alignCenter: '中央',
     alignRight: '右',
     spinSpeed: 'スピン回数',
-    extraHold: '애니메이션 이후 추가 영상 시간',
+    extraHold: 'Maintain after playback',
     sec: '秒',
     timeSetting: '時間',
     introFade: 'フェード',
@@ -413,7 +419,9 @@ export const translations: Record<Language, Record<TKey, string>> = {
     vidPause: '一時停止',
     vidStop: '停止',
     vidMute: '元のミュート',
-    vidVolume: '動画音量'
+    vidVolume: '動画音量',
+    bgEnlarge: 'Resize Bg',
+    fix: 'Fix'
   },
   zh: {
     appTitle: 'RunViz',
@@ -502,7 +510,7 @@ export const translations: Record<Language, Record<TKey, string>> = {
     alignCenter: '居中',
     alignRight: '右',
     spinSpeed: '旋转次数',
-    extraHold: '애니메이션 이후 추가 영상 시간',
+    extraHold: 'Maintain after playback',
     sec: '秒',
     timeSetting: '时间',
     introFade: '淡入',
@@ -513,6 +521,8 @@ export const translations: Record<Language, Record<TKey, string>> = {
     vidPause: '暂停',
     vidStop: '停止',
     vidMute: '原音静音',
-    vidVolume: '视频音量'
+    vidVolume: '视频音量',
+    bgEnlarge: 'Resize Bg',
+    fix: 'Fix'
   },
 };
