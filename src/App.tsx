@@ -117,7 +117,14 @@ function calcDigitsWidth(value:string, digitW:number, digitGap:number, sepW:numb
 
 function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:number, cfg:SceneConfig){
   ctx.clearRect(0,0,w,h); if(cfg.greenScreen && !cfg.bgMedia){ ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,w,h); }
-  if(cfg.bgMedia){ const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.01*w; const cy=h/2+(cfg.bgMediaY-50)*0.01*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); }
+  if(cfg.bgMedia){ 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0,0,w,h);
+    ctx.clip(); // Clip everything to the canvas boundaries
+    const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.01*w; const cy=h/2+(cfg.bgMediaY-50)*0.01*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); 
+    ctx.restore();
+  }
   
   const waitMs = cfg.animEnabled ? cfg.waitBeforeAnim * 1000 : 0;
   if(cfg.animEnabled && elapsedMs < waitMs) return; // Hidden during wait time if anim enabled
@@ -356,6 +363,7 @@ export function App(){
   const metricFontSizeRef = useRef(100); metricFontSizeRef.current = metricFontSize;
   const bgMediaStateRef = useRef({ x: 50, y: 50, scale: 100 });
   bgMediaStateRef.current = { x: bgMediaX, y: bgMediaY, scale: bgMediaScale };
+  const bgEnlargeEnabledRef = useRef(false); bgEnlargeEnabledRef.current = bgEnlargeEnabled;
 
   useEffect(()=>{ const onKey=(e:KeyboardEvent)=>{ if(!selectedElement)return; const tag=(e.target as HTMLElement)?.tagName; if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return; if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null);} }; window.addEventListener('keydown',onKey); return()=>window.removeEventListener('keydown',onKey); },[selectedElement]);
 
@@ -395,12 +403,17 @@ export function App(){
       if(!ir.active) return;
       const rect = el.getBoundingClientRect();
 
-      if(touches && touches.length >= 2 && ir.mode === 'pinch') {
+      if(touches && touches.length >= 2 && (ir.mode === 'pinch' || (touches.length >= 2 && ir.type === 'bg'))) {
         const dist = getDist(touches[0], touches[1]);
         const angle = getAngle(touches[0], touches[1]);
+        if (ir.mode !== 'pinch') {
+            ir.mode = 'pinch';
+            ir.initialDist = dist;
+            ir.initialAngle = angle;
+        }
         const scale = dist / ir.initialDist;
         const angleDiff = angle - ir.initialAngle;
-        const nextSize = Math.max(ir.type === 'bg' ? 100 : 10, Math.min(500, Math.round(ir.origSize * scale)));
+        const nextSize = Math.max(ir.type === 'bg' ? 10 : 10, Math.min(1000, Math.round(ir.origSize * scale)));
         markResizing();
 
         if(ir.type === 'record') setMetricFontSize(nextSize);
@@ -430,6 +443,14 @@ export function App(){
       // Escape focus from inputs when touching or dragging in the preview
       if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
+      }
+
+      if (bgEnlargeEnabledRef.current) {
+        // 배경 확대 모드일 때는 배경 미디어만 선택 가능하게 강제
+        e.preventDefault();
+        if (selectedElementRef.current !== 'bg') setSelectedElement('bg');
+        startInteraction(e.clientX, e.clientY);
+        return;
       }
 
       if (item) {
@@ -536,7 +557,7 @@ export function App(){
     setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },1500);
   };
 
-  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement==='bg'){ setBgMediaScale(p=>Math.max(100,Math.min(500,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
+  const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement==='bg'){ setBgMediaScale(p=>Math.max(10,Math.min(1000,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
   const handleDragOver=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }; const handleDragLeave=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }; const handleDrop=(e:React.DragEvent)=>{ e.preventDefault(); e.stopPropagation(); setIsDragOver(false); const file=e.dataTransfer.files?.[0]; if(!file)return; if(!file.type.startsWith('image/')&&!file.type.startsWith('video/'))return; processMediaFile(file); };
   
   const processMediaFile=(file:File)=>{
@@ -948,9 +969,9 @@ export function App(){
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*1.0; const ty=(bgMediaY-50)*1.0; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center'}; return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden', outline: (bgEnlargeEnabled && selectedElement==='bg') ? '2px dashed #e94560' : 'none', outlineOffset: '-4px'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
+            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*1.0; const ty=(bgMediaY-50)*1.0; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center', outline: (bgEnlargeEnabled && selectedElement==='bg') ? '3px dashed #e94560' : 'none', outlineOffset: '-4px'}; return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
             
-            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:selectedElement==='record'?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
+            <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''} ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:(selectedElement==='record' && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
                 <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
@@ -958,14 +979,14 @@ export function App(){
               </div>
             </div>
 
-            {textOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="text" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:selectedElement===`text-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.text}</div>))}
-            {emojiOverlays.map(ov=>(<div key={ov.id} className="draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing" data-type="emoji" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,fontSize:ov.size,outline:selectedElement===`emoji-${ov.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.emoji}</div>))}
+            {textOverlays.map(ov=>(<div key={ov.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="text" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,color:ov.color,fontSize:ov.fontSize,fontFamily:ov.fontFamily,fontWeight:600,textShadow:'0 2px 8px rgba(0,0,0,0.5)',whiteSpace:'nowrap',outline:(selectedElement===`text-${ov.id}` && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.text}</div>))}
+            {emojiOverlays.map(ov=>(<div key={ov.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="emoji" data-id={ov.id} style={{left:`${ov.x}%`,top:`${ov.y}%`,transform:`translate(-50%, -50%) rotate(${ov.rotation}deg)`,fontSize:ov.size,outline:(selectedElement===`emoji-${ov.id}` && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'4px', touchAction:'none'}}>{ov.emoji}</div>))}
             {stickers.map(st=>{
                 if(st.useTimeRange && isAnimating){
                     const curSec = previewElapsed / 1000;
                     if(curSec < (st.startTime || 0) || curSec > (st.endTime || 999)) return null;
                 }
-                return (<div key={st.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 ${st.rounded ? 'rounded-[15%]' : ''}`} data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:selectedElement===`sticker-${st.id}`?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none', overflow:st.rounded?'hidden':'visible'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>);
+                return (<div key={st.id} className={`draggable-item absolute z-20 select-none cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0 ${st.rounded ? 'rounded-[15%]' : ''} ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="sticker" data-id={st.id} style={{left:`${st.x}%`,top:`${st.y}%`,width:st.aspectRatio>=1?st.size:st.size*st.aspectRatio,height:st.aspectRatio>=1?st.size/st.aspectRatio:st.size,transform:`translate(-50%, -50%) rotate(${st.rotation}deg)`,outline:(selectedElement===`sticker-${st.id}` && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'6px', padding:'0', touchAction:'none', border:st.borderWidth>0?`${st.borderWidth}px solid ${st.borderColor}`:'none', overflow:st.rounded?'hidden':'visible'}}><img src={st.url} alt="" className="w-full h-full object-fill pointer-events-none"/></div>);
             })}
 
             {bgEnlargeEnabled && (
@@ -976,7 +997,7 @@ export function App(){
                 </div>
             )}
 
-            {selectedElement && !['record','bg'].includes(selectedElement) && ( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
+            {selectedElement && !['record','bg'].includes(selectedElement) && !bgEnlargeEnabled && ( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
           </div>
           
