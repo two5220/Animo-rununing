@@ -74,7 +74,7 @@ function playSound(type: string, volume: number, durationMs: number, animStyle: 
         } else if(type==='casual'){
           const len=Math.floor(audioCtx.sampleRate*0.012); const buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate); const d=buf.getChannelData(0);
           for(let j=0;j<len;j++) d[j]=(Math.random()*2-1)*(1-j/len);
-          const src=audioCtx.createBufferSource(); src.buffer=buf; const bp=audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(2500+Math.random()*500, now+t); bp.Q.setValueAtTime(2, now+t);
+          const src=audioCtx.createBufferSource(); src.buffer=buf; const bp=audioCtx.createBiquadFilter(); bp.type='borderpass'; bp.frequency.setValueAtTime(2500+Math.random()*500, now+t); bp.Q.setValueAtTime(2, now+t);
           const g=audioCtx.createGain(); src.connect(bp); bp.connect(g); g.connect(dest);
           g.gain.setValueAtTime(volume*0.12*fade, now+t); g.gain.exponentialRampToValueAtTime(0.001, now+t+0.015); src.start(now+t);
           const o=audioCtx.createOscillator(); const g2=audioCtx.createGain(); o.connect(g2); g2.connect(dest); o.type='triangle'; o.frequency.setValueAtTime(800+Math.random()*300, now+t);
@@ -85,7 +85,7 @@ function playSound(type: string, volume: number, durationMs: number, animStyle: 
         } else if(type==='bubble'){
           const nlen=Math.floor(audioCtx.sampleRate*0.016); const nbuf=audioCtx.createBuffer(1,nlen,audioCtx.sampleRate); const nd=nbuf.getChannelData(0);
           for(let k=0;k<nlen;k++) nd[k]=(Math.random()*2-1)*(1-k/nlen);
-          const src=audioCtx.createBufferSource(); src.buffer=nbuf; const bp=audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(3000, now+t); bp.Q.setValueAtTime(3, now+t);
+          const src=audioCtx.createBufferSource(); src.buffer=nbuf; const bp=audioCtx.createBiquadFilter(); bp.type='borderpass'; bp.frequency.setValueAtTime(3000, now+t); bp.Q.setValueAtTime(3, now+t);
           const g=audioCtx.createGain(); src.connect(bp); bp.connect(g); g.connect(dest); g.gain.setValueAtTime(volume*0.1*fade, now+t); g.gain.exponentialRampToValueAtTime(0.001, now+t+0.02); src.start(now+t);
           const o=audioCtx.createOscillator(); const g2=audioCtx.createGain(); o.connect(g2); g2.connect(dest); o.type='sine'; const f=1000+Math.random()*400; o.frequency.setValueAtTime(f, now+t);
           g2.gain.setValueAtTime(volume*0.05*fade, now+t); g2.gain.exponentialRampToValueAtTime(0.001, now+t+0.035); o.start(now+t); o.stop(now+t+0.04);
@@ -122,7 +122,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     ctx.beginPath();
     ctx.rect(0,0,w,h);
     ctx.clip(); // Clip everything to the canvas boundaries
-    const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w/2+(cfg.bgMediaX-50)*0.01*w; const cy=h/2+(cfg.bgMediaY-50)*0.01*h; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); 
+    const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w*cfg.bgMediaX/100; const cy=h*cfg.bgMediaY/100; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); 
     ctx.restore();
   }
   
@@ -424,8 +424,10 @@ export function App(){
       } else if(ir.mode === 'drag') {
         const dx = clientX - ir.startX;
         const dy = clientY - ir.startY;
-        const nx = Math.max(-100, Math.min(200, ir.origX + (dx / rect.width) * 100)); // Loosened constraints for BG
-        const ny = Math.max(-100, Math.min(200, ir.origY + (dy / rect.height) * 100));
+        
+        // Use a consistent coordinate system relative to the container width/height
+        const nx = Math.max(-200, Math.min(300, ir.origX + (dx / rect.width) * 100));
+        const ny = Math.max(-200, Math.min(300, ir.origY + (dy / rect.height) * 100));
 
         if(ir.type === 'record') { setRecordX(Math.round(Math.max(0, Math.min(100, nx)) * 10) / 10); setRecordY(Math.round(Math.max(0, Math.min(100, ny)) * 10) / 10); }
         else if(ir.type === 'bg') { setBgMediaX(Math.round(nx * 10) / 10); setBgMediaY(Math.round(ny * 10) / 10); }
@@ -562,6 +564,11 @@ export function App(){
   
   const processMediaFile=(file:File)=>{
     const url=URL.createObjectURL(file);
+    // Reset background media parameters when adding new media
+    setBgMediaScale(100); 
+    setBgMediaX(50); 
+    setBgMediaY(50);
+    
     if(file.type.startsWith('video/')){
       setBgMediaType('video'); setBgMediaUrl(url);
       const video=document.createElement('video'); video.src=url; video.loop=false; video.muted=videoMuted; video.playsInline=true; bgVideoRef.current=video; bgImageRef.current=null;
@@ -969,7 +976,22 @@ export function App(){
       <section className="flex-1 space-y-3 order-1 lg:order-2">
         <div className="glass-panel p-3 sm:p-4">
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-            {bgMediaUrl&&(()=>{ const userScale=bgMediaScale/100; const tx=(bgMediaX-50)*1.0; const ty=(bgMediaY-50)*1.0; const mediaStyle:React.CSSProperties={position:'absolute',width:`${userScale*100}%`,height:`${userScale*100}%`,objectFit:'contain',top:'50%',left:'50%',transform:`translate(calc(-50% + ${tx}%), calc(-50% + ${ty}%))`,transformOrigin:'center center', outline: (bgEnlargeEnabled && selectedElement==='bg') ? '3px dashed #e94560' : 'none', outlineOffset: '-4px'}; return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); })()}
+            {bgMediaUrl&&(()=>{ 
+                const userScale=bgMediaScale/100; 
+                // Positioning using top/left based on percentage matches drawScene logic and fixes sensitivity
+                const mediaStyle:React.CSSProperties={
+                    position:'absolute',
+                    top:`${bgMediaY}%`,
+                    left:`${bgMediaX}%`,
+                    transform: `translate(-50%, -50%) scale(${userScale})`,
+                    transformOrigin:'center center', 
+                    outline: (bgEnlargeEnabled && selectedElement==='bg') ? '3px dashed #e94560' : 'none', 
+                    outlineOffset: '-4px',
+                    maxWidth: 'none', 
+                    maxHeight: 'none' 
+                }; 
+                return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle} className="min-w-full min-h-full object-contain"/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline className="min-w-full min-h-full object-contain"/>)}</div>); 
+            })()}
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''} ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:(selectedElement==='record' && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
