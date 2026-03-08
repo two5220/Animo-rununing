@@ -809,7 +809,7 @@ export function App(){
             <label className="text-xs font-medium text-white/60 mb-1 block">{t('duration')}</label>
             <div className="flex gap-2"><div className="flex-1"><input type="number" min="0" max="99" className="input-field text-center" value={hours} onChange={(e)=>setHours(e.target.value)} placeholder={t('hours')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('hours')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={minutes} onChange={(e)=>setMinutes(e.target.value)} placeholder={t('minutes')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('minutes')}</span></div><span className="text-white/30 self-start pt-2">:</span><div className="flex-1"><input type="number" min="0" max="59" className="input-field text-center" value={seconds} onChange={(e)=>setSeconds(e.target.value)} placeholder={t('seconds')} /><span className="text-[10px] text-white/30 block text-center mt-0.5">{t('seconds')}</span></div></div>
           </div>
-          <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setSeconds(e.target.value)} /></div></div></div>
+          <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('distance')} ({t('km')})</label><input type="number" step="0.01" min="0" className="input-field" value={distance} onChange={(e)=>setDistance(e.target.value)} /></div><div><label className="text-xs font-medium text-white/60 mb-1 block">{t('pace')} ({t('minKm')})</label><div className="flex gap-1 items-center"><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceMin} onChange={(e)=>setPaceMin(e.target.value)} /><span className="text-white/30 text-xs">:</span><input type="number" min="0" max="59" className="input-field text-center flex-1" value={paceSec} onChange={(e)=>setPaceSec(e.target.value)} /></div></div></div>
         </Section></div>
         <div className={`${activeTab===1?'block':'hidden'}`}><Section title={t('sectionStyle')}>
           <div>
@@ -978,11 +978,13 @@ export function App(){
           <div ref={previewContainerRef} className={`${getPreviewClass()} max-h-[60vh] sm:max-h-[70vh] mx-auto rounded-xl overflow-hidden relative`} style={{background:isDragOver?'rgba(233,69,96,0.15)':(greenScreen?'#00FF00':'repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, rgba(255,255,255,0.06) 0% 50%) 0 0 / 20px 20px'), border:isDragOver?'2px dashed #e94560':'2px solid transparent', ...getPreviewStyle()}} onWheel={handleWheel} onDragOver={handleDragOver} onDragEnter={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
             {bgMediaUrl&&(()=>{ 
                 const userScale=bgMediaScale/100; 
-                // Positioning using top/left based on percentage matches drawScene logic and fixes sensitivity
                 const mediaStyle:React.CSSProperties={
                     position:'absolute',
                     top:`${bgMediaY}%`,
                     left:`${bgMediaX}%`,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
                     transform: `translate(-50%, -50%) scale(${userScale})`,
                     transformOrigin:'center center', 
                     outline: (bgEnlargeEnabled && selectedElement==='bg') ? '3px dashed #e94560' : 'none', 
@@ -990,7 +992,7 @@ export function App(){
                     maxWidth: 'none', 
                     maxHeight: 'none' 
                 }; 
-                return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle} className="min-w-full min-h-full object-contain"/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline className="min-w-full min-h-full object-contain"/>)}</div>); 
+                return(<div className={`draggable-item absolute inset-0 ${bgEnlargeEnabled ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'}`} data-type="bg" data-id="bg" style={{overflow:'hidden'}}>{bgMediaType==='image'?(<img src={bgMediaUrl} alt="" style={mediaStyle}/>):(<video ref={bgVideoRef} src={bgMediaUrl} style={mediaStyle} muted={videoMuted} playsInline/>)}</div>); 
             })()}
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''} ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:(selectedElement==='record' && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
