@@ -27,8 +27,9 @@ const THEMES = [
 
 type TextAlign = 'left' | 'center' | 'right';
 type IntroEffect = 'fade' | 'slide-up' | 'zoom-in' | 'none';
-const ANIM_DELAY = 300;
+const ANIM_DELAY = 200; 
 const DEFAULT_STAGGER = 80;
+const ANIM_OVERHEAD = 1000; // ANIM_DELAY(200) + approx max stagger(800)
 
 /* ─── Easing ─── */
 function bezierComp(t: number, p1: number, p2: number) { const mt=1-t; return 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t; }
@@ -199,7 +200,7 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     chars.forEach((ch,ci)=>{
       if(/[0-9]/.test(ch)){
         const target=parseInt(ch); 
-        const dDur=cfg.animDuration+ci*cfg.staggerDelay; 
+        const dDur=(cfg.animDuration - ANIM_OVERHEAD)+ci*cfg.staggerDelay; 
         const prog=cfg.animEnabled ? Math.min(Math.max(actualElapsed,0)/dDur,1) : 1; 
         const eased=easingFn(prog); 
         const scroll=(cfg.animEnabled ? cfg.spinCycles*10+target : target)*eased;
@@ -326,7 +327,7 @@ export function App(){
   const previewTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
   useEffect(() => {
-    if(isAnimating) {
+    if(isAnimating || isRecording) {
         const start = performance.now();
         previewTimerRef.current = setInterval(() => {
             setPreviewElapsed(performance.now() - start);
@@ -336,7 +337,7 @@ export function App(){
         setPreviewElapsed(0);
     }
     return () => { if(previewTimerRef.current) clearInterval(previewTimerRef.current); };
-  }, [isAnimating]);
+  }, [isAnimating, isRecording]);
 
   useEffect(() => {
     if(!animEnabled) {
@@ -526,7 +527,7 @@ export function App(){
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
       setIsAnimating(true);
       const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
-      if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
+      if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration - ANIM_OVERHEAD,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
       setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
       setTimeout(()=>{
         setIsAnimating(false);
@@ -534,7 +535,7 @@ export function App(){
             bgVideoRef.current.pause();
             setVideoPaused(true);
         }
-      },ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + extraHoldTime*1000);
+      },totalWaitMs + animDuration + extraHoldTime*1000);
     }); });
   };
   
@@ -710,15 +711,15 @@ export function App(){
       setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
       if(soundEnabled && audioCtx && audioDest){
         setTimeout(()=>{
-          playSound(soundType, soundVolume, animDuration, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
+          playSound(soundType, soundVolume, animDuration - ANIM_OVERHEAD, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
         },ANIM_DELAY + totalWaitMs);
       }
-      setTimeout(()=>setIsAnimating(false),ANIM_DELAY + totalWaitMs + animDuration + DEFAULT_STAGGER*10 + 300);
+      setTimeout(()=>setIsAnimating(false),totalWaitMs + animDuration);
     }
 
     const startTime=performance.now(); 
     const holdMs=extraHoldTime*1000; 
-    let totalMs = animEnabled ? (totalWaitMs+animDuration+holdMs+ANIM_DELAY+DEFAULT_STAGGER*10) : 3000;
+    let totalMs = animEnabled ? (totalWaitMs+animDuration+holdMs) : 3000;
     
     if(!animEnabled && bgMediaType==='video' && bgVideoRef.current) {
         totalMs = (bgVideoRef.current.duration - bgVideoRef.current.currentTime) * 1000;
@@ -850,7 +851,7 @@ export function App(){
             <div className="grid grid-cols-4 gap-1.5">
               <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'전체 크기':'Size'}</span><ClampedNumberInput value={metricFontSize-80} min={0} max={410} onChange={(v)=>setMetricFontSize(v+80)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
               <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'라벨 크기':'Label'}</span><ClampedNumberInput value={labelFontSize-85} min={0} max={270} onChange={(v)=>setLabelFontSize(v+85)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
-              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'기록 간격':'Gap'}</span><ClampedNumberInput value={spacing+7} min={0} max={80} onChange={(v)=>setSpacing(v-7)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
+              <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'기록 간격':'Gap'}</span><ClampedNumberInput value={metricAlign==='center'?spacing:spacing+7} min={0} max={80} onChange={(v)=>setSpacing(metricAlign==='center'?v:v-7)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
               <div><span className="text-[10px] text-white/80 font-bold block mb-1 truncate text-center">{language==='ko'?'라벨 간격':'L-Gap'}</span><ClampedNumberInput value={labelGapValue+6} min={0} max={20} onChange={(v)=>setLabelGapValue(v-6)} className="input-field text-[11px] text-center p-1.5 w-full"/></div>
             </div>
           </div>
@@ -859,7 +860,7 @@ export function App(){
           <div className="flex items-center justify-between mb-2"><label className="text-sm font-semibold text-white/80">{language==='ko'?'애니메이션':'Animation'}</label><button className={`w-12 h-6 rounded-full transition-colors relative border ${animEnabled?'bg-[#e94560] border-[#e94560]':'bg-white/15 border-white/30'}`} onClick={()=>setAnimEnabled(!animEnabled)}><span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${animEnabled?'left-6':'left-0.5'}`}/></button></div>
           
           <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animStyle')}</label><div className="flex gap-1.5">{(['machine','default','bounce'] as AnimStyle[]).map(s=>(<button key={s} disabled={!animEnabled} className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition border ${animStyle===s?'bg-[#e94560] text-white border-[#e94560]':'bg-white/10 text-white/80 border-white/20 hover:bg-white/20'} ${!animEnabled?'opacity-40 cursor-not-allowed':''}`} onClick={()=>setAnimStyle(s)}>{t(`style${s.charAt(0).toUpperCase()+s.slice(1)}`)}</button>))}</div></div>
-          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {animDuration/1000}s</label><input type="range" min="1000" max="10000" step="1000" disabled={!animEnabled} className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
+          <div><label className="text-xs font-medium text-white/60 mb-1 block">{t('animSpeed')}: {animDuration/1000}s</label><input type="range" min="2000" max="8000" step="1000" disabled={!animEnabled} className="thumb-only-slider" value={animDuration} onChange={(e)=>setAnimDuration(Number(e.target.value))}/></div>
           
           <div className="border-t border-white/10 pt-3 mt-3">
             <div className="flex items-center justify-between mb-2">
@@ -928,7 +929,8 @@ export function App(){
             const url=URL.createObjectURL(file);
             const img=new Image(); img.src=url;
             img.onload=()=>{
-                setStickers(p=>[...p, {id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: (waitBeforeAnim + (animDuration/1000) + extraHoldTime), rounded: false}]);
+                const defaultEnd = (useWait ? waitBeforeAnim : 0) + (animDuration / 1000) + extraHoldTime;
+                setStickers(p=>[...p, {id:uid(),url,x:50,y:50,size:150,rotation:0,borderWidth:1,borderColor:'#ffffff',aspectRatio:img.width/img.height, useTimeRange: false, startTime: 0, endTime: defaultEnd, rounded: false}]);
                 if(stickerInputRef.current)stickerInputRef.current.value='';
             };
           }}/>
@@ -949,7 +951,7 @@ export function App(){
                 <label className="flex items-center gap-1 cursor-pointer select-none">
                   <input type="checkbox" checked={st.useTimeRange} onChange={(e)=>{
                     const checked = e.target.checked;
-                    const defaultEnd = waitBeforeAnim + (animDuration / 1000) + extraHoldTime;
+                    const defaultEnd = (useWait ? waitBeforeAnim : 0) + (animDuration / 1000) + extraHoldTime;
                     setStickers(p=>p.map(s=>s.id===st.id?{...s,useTimeRange:checked, endTime: checked ? defaultEnd : s.endTime}:s));
                   }} className="w-3.5 h-3.5 rounded accent-[#e94560] cursor-pointer"/>
                   <span className="text-[12px] text-white/50 font-bold">{t('timeSetting')}</span>
@@ -997,9 +999,9 @@ export function App(){
             
             <div className={`draggable-item absolute z-10 select-none cursor-grab active:cursor-grabbing ${isCurrentlyWaiting ? 'opacity-0 pointer-events-none' : ''} ${bgEnlargeEnabled ? 'pointer-events-none' : ''}`} data-type="record" data-id="record" style={{left:`${recordX}%`,top:`${recordY}%`,outline:(selectedElement==='record' && !bgEnlargeEnabled)?'1.5px dashed rgba(96,165,250,0.8)':'none', outlineOffset:'10px', padding:'4px', touchAction:'none', transition: (isResizing||layoutChanging||isAnimating) ? 'none' : 'opacity 0.2s ease', ...previewIntroStyle}}>
               <div className={`flex ${layout==='vertical'?`flex-col ${alignClass}`:'flex-row items-center'}`} style={{gap:`${RECORD_GAP_PX}px`,flexWrap:'nowrap',whiteSpace:'nowrap'}}>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
-                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblPace.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`p-${animKey}`} value={showValues?paceStr:'00:00'} fontSize={fontSize} duration={animDuration} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitPace}</span>)}</div></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDuration.toUpperCase()}</span>)}<OdometerGroup key={`t-${animKey}`} value={showValues?durationStr:durationZero} fontSize={fontSize} duration={animDuration - ANIM_OVERHEAD} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblDistance.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`d-${animKey}`} value={showValues?distStr:'0.00'} fontSize={fontSize} duration={animDuration - ANIM_OVERHEAD} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitKm}</span>)}</div></div>
+                <div className="relative flex-shrink-0 inline-block">{showLabels&&(<span className={`absolute whitespace-nowrap font-bold uppercase ${metricAlign==='center'?'left-1/2 -translate-x-1/2':metricAlign==='right'?'right-0':'left-0'}`} style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.4*(labelFontSize/100),bottom:'100%',marginBottom:LABEL_GAP_PX,letterSpacing:'0.02em'}}>{lblPace.toUpperCase()}</span>)}<div className="relative inline-block"><OdometerGroup key={`p-${animKey}`} value={showValues?paceStr:'00:00'} fontSize={fontSize} duration={animDuration - ANIM_OVERHEAD} color={digitColor} bgColor="transparent" fontFamily={selectedFont} animStyle={animStyle} staggerDelay={DEFAULT_STAGGER} spinCycles={showValues?spinCycles:0} noTransition={isResizing||layoutChanging} digitGap={fontSize*0.06*(spacing/10)}/>{showUnits&&(<span className="font-medium whitespace-nowrap absolute" style={{color:labelColor,fontFamily:selectedFont,fontSize:fontSize*0.54,left:'100%',bottom:fontSize*0.18,marginLeft:fontSize*0.12,lineHeight:1}}>{unitPace}</span>)}</div></div>
               </div>
             </div>
 
@@ -1023,6 +1025,17 @@ export function App(){
 
             {selectedElement && !['record','bg'].includes(selectedElement) && !bgEnlargeEnabled && ( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
+
+            {(isAnimating || isRecording) && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/50 backdrop-blur-sm text-white text-[12px] px-3 py-1.5 rounded-full border border-white/10 font-mono">
+                <span className="w-1.5 h-1.5 bg-[#e94560] rounded-full animate-pulse"/>
+                {(previewElapsed / 1000).toFixed(1)}s / {(() => {
+                  const tw = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
+                  const dur = animEnabled ? (tw + animDuration + (extraHoldTime * 1000)) : (bgMediaType === 'video' && bgVideoRef.current ? (bgVideoRef.current.duration - bgVideoRef.current.currentTime) * 1000 : 3000);
+                  return (dur / 1000).toFixed(1);
+                })()}s
+              </div>
+            )}
           </div>
           
           {bgMediaUrl && bgMediaType === 'video' && (
