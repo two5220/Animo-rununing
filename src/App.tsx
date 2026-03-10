@@ -9,7 +9,7 @@ interface StickerData { id: string; url: string; x: number; y: number; size: num
 
 /* ─── Constants ─── */
 const FONTS = ['Orbitron','Russo One','Black Ops One','Bungee','Silkscreen'];
-const RUNNING_EMOJIS = ['🏃','🏃‍♂️','🏃‍♀️','👟','🥇','🏅','⏱️','🔥','💪','❤️','🎯','⚡','🌟','🏆','🎽','💨','👣','🏁','🥈','🥉','⭐','✨','🎉','💯','❤️‍🔥','🦵','🫀','🌈','🌅','🌄','😤','🤩','💫','🎵','🌸','🍀','🌺','🌻','💐','🌿'];
+const RUNNING_EMOJIS = ['🏃','🏃‍♂️','🏃‍♀️','👟','🥇','🏅','⏱️','🔥','💪','❤️','🎯','⚡','🌟','🏆','🎽','💨','👣','🏁','🥈','🥉','⭐','✨','🎉','💯','❤️‍🔥','腿','🫀','🌈','🌅','🌄','😤','🤩','💫','🎵','🌸','🍀','🌺','🌻','💐','🌿'];
 const ASPECT_RATIOS: Record<string, { w: number; h: number; label: string }> = { '1:1': { w: 1080, h: 1080, label: '1:1' }, '16:9': { w: 1920, h: 1080, label: '16:9' }, '9:16': { w: 1080, h: 1920, label: '9:16' } };
 const SOUND_TYPES = ['drop','bubble','tick'] as const;
 let CURRENT_SPIN = 3;
@@ -29,7 +29,7 @@ type TextAlign = 'left' | 'center' | 'right';
 type IntroEffect = 'fade' | 'slide-up' | 'zoom-in' | 'none';
 const ANIM_DELAY = 200; 
 const DEFAULT_STAGGER = 80;
-const ANIM_OVERHEAD = 1000; // ANIM_DELAY(200) + approx max stagger(800)
+const ANIM_OVERHEAD = 1000; 
 
 /* ─── Easing ─── */
 function bezierComp(t: number, p1: number, p2: number) { const mt=1-t; return 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t; }
@@ -318,6 +318,8 @@ export function App(){
   const [videoMuted, setVideoMuted] = useState(false);
   const [videoVolume, setVideoVolume] = useState(1);
   const [videoPaused, setVideoPaused] = useState(true);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoTotalTime, setVideoTotalTime] = useState(0);
   const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null); const [videoMimeType,setVideoMimeType]=useState<string|null>(null);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
   const [activeTab,setActiveTab]=useState(0); const [selectedElement,setSelectedElement]=useState<string|null>(null);
@@ -331,13 +333,28 @@ export function App(){
         const start = performance.now();
         previewTimerRef.current = setInterval(() => {
             setPreviewElapsed(performance.now() - start);
+            if(bgMediaType === 'video' && bgVideoRef.current) {
+                setVideoCurrentTime(bgVideoRef.current.currentTime);
+            }
         }, 16);
     } else {
         if(previewTimerRef.current) clearInterval(previewTimerRef.current);
         setPreviewElapsed(0);
     }
     return () => { if(previewTimerRef.current) clearInterval(previewTimerRef.current); };
-  }, [isAnimating, isRecording]);
+  }, [isAnimating, isRecording, bgMediaType]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+    if (!videoPaused && bgVideoRef.current && !isAnimating && !isRecording) {
+      timer = setInterval(() => {
+        if (bgVideoRef.current) {
+          setVideoCurrentTime(bgVideoRef.current.currentTime);
+        }
+      }, 50);
+    }
+    return () => clearInterval(timer);
+  }, [videoPaused, isAnimating, isRecording]);
 
   useEffect(() => {
     if(!animEnabled) {
@@ -426,7 +443,6 @@ export function App(){
         const dx = clientX - ir.startX;
         const dy = clientY - ir.startY;
         
-        // Use a consistent coordinate system relative to the container width/height
         const nx = Math.max(-200, Math.min(300, ir.origX + (dx / rect.width) * 100));
         const ny = Math.max(-200, Math.min(300, ir.origY + (dy / rect.height) * 100));
 
@@ -443,13 +459,11 @@ export function App(){
       const target = e.target as HTMLElement;
       const item = target.closest('.draggable-item');
       
-      // Escape focus from inputs when touching or dragging in the preview
       if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
       }
 
       if (bgEnlargeEnabledRef.current) {
-        // 배경 확대 모드일 때는 배경 미디어만 선택 가능하게 강제
         e.preventDefault();
         if (selectedElementRef.current !== 'bg') setSelectedElement('bg');
         startInteraction(e.clientX, e.clientY);
@@ -515,7 +529,6 @@ export function App(){
     if(!animEnabled) return;
     stopAllSounds(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
     
-    // Video Playback logic
     if(bgMediaType==='video' && bgVideoRef.current) {
         const vid = bgVideoRef.current;
         vid.muted = videoMuted;
@@ -548,6 +561,7 @@ export function App(){
         bgVideoRef.current.currentTime = 0;
         bgVideoRef.current.pause();
         setVideoPaused(true);
+        setVideoCurrentTime(0);
     }
   };
   
@@ -565,7 +579,6 @@ export function App(){
   
   const processMediaFile=(file:File)=>{
     const url=URL.createObjectURL(file);
-    // Reset background media parameters when adding new media
     setBgMediaScale(100); 
     setBgMediaX(50); 
     setBgMediaY(50);
@@ -581,8 +594,10 @@ export function App(){
             setCustomAR({w:Math.round(vw*sc),h:Math.round(vh*sc)}); 
             setAspectRatio('custom'); 
         }
+        setVideoTotalTime(video.duration);
         video.currentTime = 0;
         setVideoPaused(true);
+        setVideoCurrentTime(0);
       });
     } else {
       setBgMediaType('image'); setBgMediaUrl(url);
@@ -738,7 +753,7 @@ export function App(){
   };
 
   const handleMediaUpload=(e:React.ChangeEvent<HTMLInputElement>)=>{ const file=e.target.files?.[0]; if(!file)return; processMediaFile(file); };
-  const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); setBgEnlargeEnabled(false); };
+  const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); setBgEnlargeEnabled(false); setVideoCurrentTime(0); setVideoTotalTime(0); };
   const deleteSelected=()=>{ if(!selectedElement)return; if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null); };
   const addTextOverlay=()=>{ setTextOverlays(p=>[...p,{id:uid(),text:new Date().toLocaleDateString(),x:50,y:90,fontSize:16,color:labelColor,fontFamily:selectedFont, rotation: 0}]); };
   const updateTextOverlay=(id:string,field:keyof TextOverlay,value:string|number)=>{ setTextOverlays(p=>p.map(o=>o.id===id?{...o,[field]:value}:o)); };
@@ -748,13 +763,11 @@ export function App(){
   const tabLabels=[{icon:'📊',label:language==='ko'?'기록':t('sectionData')},{icon:'🎨',label:language==='ko'?'스타일':t('sectionStyle')},{icon:'⚡',label:language==='ko'?'효과':t('sectionAnimation')},{icon:'📝',label:language==='ko'?'텍스트':t('sectionText')},{icon:'📁',label:language==='ko'?'미디어':t('sectionMedia')}];
   const fontSize=getPreviewFontSize(); const RECORD_GAP_PX=15+spacing*3; const LABEL_GAP_PX=labelGapValue-10;
 
-  // Actual preview visibility during playback
   const totalWaitMs = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
   const isCurrentlyWaiting = animEnabled && isAnimating && previewElapsed < totalWaitMs;
   const isActuallyPlaying = isAnimating && (!animEnabled || previewElapsed >= totalWaitMs);
   const actualPlayElapsed = isActuallyPlaying ? (animEnabled ? previewElapsed - totalWaitMs : 100000) : 0;
 
-  // Intro Effect Style for Preview
   const introDur = animEnabled ? 500 : 0;
   const introProg = introDur > 0 ? Math.min(actualPlayElapsed / introDur, 1) : 1;
   let previewIntroStyle: React.CSSProperties = { transform: 'translate(-50%, -50%)' };
@@ -775,7 +788,7 @@ export function App(){
         }
     }
   };
-  const handleVideoStop = () => { if(bgVideoRef.current) { bgVideoRef.current.pause(); bgVideoRef.current.currentTime = 0; setVideoPaused(true); } };
+  const handleVideoStop = () => { if(bgVideoRef.current) { bgVideoRef.current.pause(); bgVideoRef.current.currentTime = 0; setVideoPaused(true); setVideoCurrentTime(0); } };
 
   return(<div className="min-h-screen" style={{background:'#08080f'}}>
     <header className="border-b border-white/5 px-3 py-2.5 safe-top"><div className="max-w-[1600px] mx-auto flex items-center justify-between"><div className="flex items-center gap-2.5"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#e94560] to-[#c23152] flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-500/20">R</div><div><h1 className="text-base font-bold tracking-tight">{t('appTitle')}</h1><p className="text-[10px] text-white/40 hidden sm:block">{t('appSubtitle')}</p></div></div><div className="flex items-center gap-2"><span className="text-xs text-white/40">🌐</span><select className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" value={language} onChange={(e)=>setLanguage(e.target.value as Language)}>{Object.entries(LANG_NAMES).map(([code,name])=>(<option key={code} value={code} className="bg-gray-900">{name}</option>))}</select></div></div></header>
@@ -1026,26 +1039,48 @@ export function App(){
             {selectedElement && !['record','bg'].includes(selectedElement) && !bgEnlargeEnabled && ( <div className="absolute top-2 left-2 z-40 scale-[0.4] origin-top-left"><button className="bg-red-500/80 hover:bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center w-12 h-12" onClick={deleteSelected} title="삭제"><span className="text-4xl font-bold">🗑</span></button></div>)}
             {isRecording&&(<div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-red-600/80 text-white text-[10px] px-2 py-1 rounded-full recording-pulse"><span className="w-1.5 h-1.5 bg-white rounded-full"/> REC</div>)}
 
-            {(isAnimating || isRecording) && (
+            {(isAnimating || isRecording || (bgMediaType === 'video' && bgMediaUrl)) && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-black/50 backdrop-blur-sm text-white text-[12px] px-3 py-1.5 rounded-full border border-white/10 font-mono">
                 <span className="w-1.5 h-1.5 bg-[#e94560] rounded-full animate-pulse"/>
-                {(previewElapsed / 1000).toFixed(1)}s / {(() => {
-                  const tw = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
-                  const dur = animEnabled ? (tw + animDuration + (extraHoldTime * 1000)) : (bgMediaType === 'video' && bgVideoRef.current ? (bgVideoRef.current.duration - bgVideoRef.current.currentTime) * 1000 : 3000);
-                  return (dur / 1000).toFixed(1);
+                {(isAnimating || isRecording ? previewElapsed / 1000 : videoCurrentTime).toFixed(1)}s / {(() => {
+                  if (isAnimating || isRecording) {
+                    const tw = (animEnabled && useWait) ? waitBeforeAnim * 1000 : 0;
+                    const dur = animEnabled ? (tw + animDuration + (extraHoldTime * 1000)) : (bgMediaType === 'video' && bgVideoRef.current ? (bgVideoRef.current.duration - bgVideoRef.current.currentTime) * 1000 : 3000);
+                    return (dur / 1000).toFixed(1);
+                  }
+                  return videoTotalTime.toFixed(1);
                 })()}s
               </div>
             )}
           </div>
           
           {bgMediaUrl && bgMediaType === 'video' && (
-            <div className="flex items-center justify-center gap-4 mt-4 py-2 border-t border-white/5">
-                <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoToggle} title={videoPaused ? t('vidPlay') : t('vidPause')}>
-                    <span className="text-2xl">{videoPaused ? '▶' : 'Ⅱ'}</span>
-                </button>
-                <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoStop} title={t('vidStop')}><span className="text-2xl">■</span></button>
-                <div className="h-4 w-[1px] bg-white/10 mx-2"/>
-                <span className="text-[10px] font-mono text-white/40">{bgVideoRef.current ? `${bgVideoRef.current.currentTime.toFixed(1)}s / ${bgVideoRef.current.duration.toFixed(1)}s` : '0.0s / 0.0s'}</span>
+            <div className="mt-4 space-y-3">
+              <div className="px-2">
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={videoTotalTime || 0.1} 
+                  step="0.1" 
+                  value={videoCurrentTime}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if(bgVideoRef.current) {
+                        bgVideoRef.current.currentTime = val;
+                        setVideoCurrentTime(val);
+                    }
+                  }}
+                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#e94560] block"
+                />
+              </div>
+              <div className="flex items-center justify-center gap-4 py-2 border-t border-white/5">
+                  <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoToggle} title={videoPaused ? t('vidPlay') : t('vidPause')}>
+                      <span className="text-2xl">{videoPaused ? '▶' : 'Ⅱ'}</span>
+                  </button>
+                  <button className="text-white/60 hover:text-white transition-colors" onClick={handleVideoStop} title={t('vidStop')}><span className="text-2xl">■</span></button>
+                  <div className="h-4 w-[1px] bg-white/10 mx-2"/>
+                  <span className="text-[10px] font-mono text-white/40">{bgVideoRef.current ? `${bgVideoRef.current.currentTime.toFixed(1)}s / ${bgVideoRef.current.duration.toFixed(1)}s` : '0.0s / 0.0s'}</span>
+              </div>
             </div>
           )}
         </div>
