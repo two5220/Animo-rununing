@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { OdometerGroup, type AnimStyle } from './components/Odometer';
 import { translations, LANG_NAMES, type Language } from './i18n';
 
@@ -39,6 +39,38 @@ const EASINGS: Record<AnimStyle,(t:number)=>number> = {
   bounce: makeCubicBezier(0.34,1.56,0.64,1),
   machine: makeCubicBezier(0.77,0,0.175,1)
 };
+
+/* ─── Audio Helpers ─── */
+async function getAudioData(url: string): Promise<AudioBuffer> {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+    return buffer;
+}
+
+function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, color: string) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    const data = buffer.getChannelData(0);
+    const step = Math.ceil(data.length / width);
+    const amp = height / 2;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = color;
+    for (let i = 0; i < width; i++) {
+        let min = 1.0;
+        let max = -1.0;
+        for (let j = 0; j < step; j++) {
+            const datum = data[i * step + j];
+            if (datum < min) min = datum;
+            if (datum > max) max = datum;
+        }
+        ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+    }
+}
 
 /* ─── Sound (WebAudio) ─── */
 function playSound(type: string, volume: number, durationMs: number, animStyle: AnimStyle, ctx?: AudioContext, dests?: AudioNode[]): AudioContext {
@@ -297,6 +329,36 @@ function ClampedNumberInput({ value, min, max, step, onChange, className, title,
   return(<input type="number" min={min} max={max} step={step} className={className} value={raw} onChange={handleChange} onBlur={handleBlur} title={title} disabled={disabled}/>);
 }
 
+/* ─── Wave Visualizer Component ─── */
+function WaveVisualizer({ buffer, color, startTime, duration, onRangeChange }: { buffer: AudioBuffer | null, color: string, startTime: number, duration: number, onRangeChange?: (start: number, dur: number) => void }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    useEffect(() => {
+        if (canvasRef.current && buffer) {
+            drawWaveform(canvasRef.current, buffer, color);
+        }
+    }, [buffer, color]);
+
+    if (!buffer) return null;
+
+    const totalDur = buffer.duration;
+    const left = (startTime / totalDur) * 100;
+    const width = (duration / totalDur) * 100;
+
+    return (
+        <div className="relative w-full h-16 bg-white/5 rounded-lg overflow-hidden group cursor-pointer border border-white/10">
+            <canvas ref={canvasRef} width={600} height={64} className="w-full h-full opacity-40" />
+            <div 
+                className="absolute top-0 h-full bg-[#e94560]/30 border-x-2 border-[#e94560] shadow-[0_0_15px_rgba(233,69,96,0.3)] transition-all pointer-events-none"
+                style={{ left: `${left}%`, width: `${width}%` }}
+            />
+            <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[10px] font-mono text-white/50 bg-black/50 px-1 rounded">0s</span>
+                <span className="text-[10px] font-mono text-white/50 bg-black/50 px-1 rounded">{totalDur.toFixed(1)}s</span>
+            </div>
+        </div>
+    );
+}
+
 /* ─── Main App ─── */
 export function App(){
   const [language,setLanguage]=useState<Language>('ko'); const t=useCallback((k:string)=>translations[language]?.[k]||k,[language]);
@@ -320,6 +382,18 @@ export function App(){
   const [videoPaused, setVideoPaused] = useState(true);
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoTotalTime, setVideoTotalTime] = useState(0);
+  
+  /* BGM States */
+  const [bgmUrl, setBgmUrl] = useState<string | null>(null);
+  const [bgmBuffer, setBgmBuffer] = useState<AudioBuffer | null>(null);
+  const [bgmVolume, setBgmVolume] = useState(0.5);
+  const [bgmStartTime, setBgmStartTime] = useState(0);
+  const [bgmPlayDuration, setBgmPlayDuration] = useState(10);
+  const [bgmPreviewing, setBgmPreviewing] = useState(false);
+  const bgmInputRef = useRef<HTMLInputElement>(null);
+  const bgmSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const bgmPreviewAudioCtxRef = useRef<AudioContext | null>(null);
+
   const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null); const [videoMimeType,setVideoMimeType]=useState<string|null>(null);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
   const [activeTab,setActiveTab]=useState(0); const [selectedElement,setSelectedElement]=useState<string|null>(null);
@@ -523,11 +597,33 @@ export function App(){
   const getPreviewFontSize=()=> (layout==='vertical'?42:36)*(metricFontSize/100);
   const alignClass = metricAlign==='left'?'items-start':metricAlign==='right'?'items-end':'items-center';
   const getExportDims=()=> customAR?customAR:ASPECT_RATIOS['1:1']; const getPreviewStyle=():React.CSSProperties=> customAR?{aspectRatio:`${customAR.w} / ${customAR.h}`} : {}; const getPreviewClass=()=> customAR?'':'aspect-square';
-  const stopAllSounds=useCallback(()=>{ try{ if(activeAudioCtxRef.current&&activeAudioCtxRef.current.state!=='closed'){ activeAudioCtxRef.current.close(); } }catch{} activeAudioCtxRef.current=null; try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{} previewAudioCtxRef.current=null; },[]);
+  
+  const stopAllSounds=useCallback(()=>{ 
+    try{ if(activeAudioCtxRef.current&&activeAudioCtxRef.current.state!=='closed'){ activeAudioCtxRef.current.close(); } }catch{} 
+    activeAudioCtxRef.current=null; 
+    try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{} 
+    previewAudioCtxRef.current=null; 
+    if(bgmSourceRef.current) {
+        try { bgmSourceRef.current.stop(); } catch(e) {}
+        bgmSourceRef.current = null;
+    }
+  },[]);
+
+  const stopBgmPreview = useCallback(() => {
+    if(bgmSourceRef.current) {
+        try { bgmSourceRef.current.stop(); } catch(e) {}
+        bgmSourceRef.current = null;
+    }
+    if(bgmPreviewAudioCtxRef.current && bgmPreviewAudioCtxRef.current.state !== 'closed') {
+        bgmPreviewAudioCtxRef.current.close();
+        bgmPreviewAudioCtxRef.current = null;
+    }
+    setBgmPreviewing(false);
+  }, []);
   
   const playAnimation=()=>{
     if(!animEnabled) return;
-    stopAllSounds(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
+    stopAllSounds(); stopBgmPreview(); setShowValues(false); setIsAnimating(false); setAnimKey(k=>k+1);
     
     if(bgMediaType==='video' && bgVideoRef.current) {
         const vid = bgVideoRef.current;
@@ -540,7 +636,29 @@ export function App(){
     requestAnimationFrame(()=>{ requestAnimationFrame(()=>{
       setIsAnimating(true);
       const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
-      if(soundEnabled){ setTimeout(()=>{ const ctx=playSound(soundType,soundVolume,animDuration - ANIM_OVERHEAD,animStyle); activeAudioCtxRef.current=ctx; },ANIM_DELAY + totalWaitMs);}
+      
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      activeAudioCtxRef.current = audioCtx;
+      
+      if(soundEnabled){ 
+        setTimeout(()=>{ 
+            playSound(soundType,soundVolume,animDuration - ANIM_OVERHEAD,animStyle, audioCtx); 
+        },ANIM_DELAY + totalWaitMs);
+      }
+
+      if(bgmBuffer) {
+        setTimeout(() => {
+            const source = audioCtx.createBufferSource();
+            source.buffer = bgmBuffer;
+            const gain = audioCtx.createGain();
+            gain.gain.value = bgmVolume;
+            source.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(0, bgmStartTime, bgmPlayDuration + extraHoldTime + 1);
+            bgmSourceRef.current = source;
+        }, totalWaitMs);
+      }
+
       setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
       setTimeout(()=>{
         setIsAnimating(false);
@@ -548,12 +666,13 @@ export function App(){
             bgVideoRef.current.pause();
             setVideoPaused(true);
         }
+        stopAllSounds();
       },totalWaitMs + animDuration + extraHoldTime*1000);
     }); });
   };
   
   const resetAnimation=()=>{ 
-    stopAllSounds(); 
+    stopAllSounds(); stopBgmPreview();
     setShowValues(!animEnabled); 
     setIsAnimating(false); 
     setAnimKey(k=>k+1); 
@@ -663,7 +782,7 @@ export function App(){
     let audioCtx:AudioContext|null=null; let audioDest:MediaStreamAudioDestinationNode|null=null;
     let finalStream = canvasStream;
 
-    if((soundEnabled && animEnabled) || (bgMediaType==='video' && !videoMuted)) {
+    if((soundEnabled && animEnabled) || (bgMediaType==='video' && !videoMuted) || bgmBuffer) {
       try{
         audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 48000 });
         await audioCtx.resume();
@@ -729,7 +848,31 @@ export function App(){
           playSound(soundType, soundVolume, animDuration - ANIM_OVERHEAD, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
         },ANIM_DELAY + totalWaitMs);
       }
+      if(bgmBuffer && audioCtx && audioDest) {
+        setTimeout(() => {
+            const source = audioCtx!.createBufferSource();
+            source.buffer = bgmBuffer;
+            const gain = audioCtx!.createGain();
+            gain.gain.value = bgmVolume;
+            source.connect(gain);
+            gain.connect(audioDest!);
+            gain.connect(audioCtx!.destination);
+            source.start(0, bgmStartTime, (animDuration + extraHoldTime * 1000) / 1000 + 2);
+        }, totalWaitMs);
+      }
       setTimeout(()=>setIsAnimating(false),totalWaitMs + animDuration);
+    } else {
+        // No animation, but maybe BGM?
+        if(bgmBuffer && audioCtx && audioDest) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = bgmBuffer;
+            const gain = audioCtx.createGain();
+            gain.gain.value = bgmVolume;
+            source.connect(gain);
+            gain.connect(audioDest);
+            gain.connect(audioCtx.destination);
+            source.start(0, bgmStartTime, 5); // 3-5s for static
+        }
     }
 
     const startTime=performance.now(); 
@@ -754,6 +897,42 @@ export function App(){
 
   const handleMediaUpload=(e:React.ChangeEvent<HTMLInputElement>)=>{ const file=e.target.files?.[0]; if(!file)return; processMediaFile(file); };
   const removeMedia=()=>{ setBgMediaUrl(null); bgVideoRef.current=null; bgImageRef.current=null; if(mediaInputRef.current) mediaInputRef.current.value=''; setCustomAR(null); setBgEnlargeEnabled(false); setVideoCurrentTime(0); setVideoTotalTime(0); };
+  
+  const handleBgmUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+        const url = URL.createObjectURL(file);
+        const buffer = await getAudioData(url);
+        setBgmUrl(url);
+        setBgmBuffer(buffer);
+        setBgmStartTime(0);
+        setBgmPlayDuration(Math.min(buffer.duration, 15));
+    } catch(err) { console.error('BGM load error:', err); }
+    if(bgmInputRef.current) bgmInputRef.current.value = '';
+  };
+
+  const toggleBgmPreview = () => {
+    if(bgmPreviewing) {
+        stopBgmPreview();
+    } else if(bgmBuffer) {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        bgmPreviewAudioCtxRef.current = audioCtx;
+        const source = audioCtx.createBufferSource();
+        source.buffer = bgmBuffer;
+        const gain = audioCtx.createGain();
+        gain.gain.value = bgmVolume;
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        source.start(0, bgmStartTime, bgmPlayDuration);
+        bgmSourceRef.current = source;
+        setBgmPreviewing(true);
+        source.onended = () => { setBgmPreviewing(false); };
+    }
+  };
+
+  const removeBgm = () => { stopBgmPreview(); setBgmUrl(null); setBgmBuffer(null); if(bgmInputRef.current) bgmInputRef.current.value=''; };
+
   const deleteSelected=()=>{ if(!selectedElement)return; if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.filter(o=>o.id!==id)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.filter(s=>s.id!==id)); } setSelectedElement(null); };
   const addTextOverlay=()=>{ setTextOverlays(p=>[...p,{id:uid(),text:new Date().toLocaleDateString(),x:50,y:90,fontSize:16,color:labelColor,fontFamily:selectedFont, rotation: 0}]); };
   const updateTextOverlay=(id:string,field:keyof TextOverlay,value:string|number)=>{ setTextOverlays(p=>p.map(o=>o.id===id?{...o,[field]:value}:o)); };
@@ -936,6 +1115,50 @@ export function App(){
                 )}
             </div>
           )}
+
+          {/* BGM Section */}
+          <div className="border-t border-white/10 pt-3 mt-1">
+            <label className="text-xs font-medium text-white/60 mb-2 block">🎵 {t('bgm')}</label>
+            <input ref={bgmInputRef} type="file" accept="audio/*" className="hidden" onChange={handleBgmUpload}/>
+            {!bgmUrl ? (
+                <button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95" onClick={()=>bgmInputRef.current?.click()}>🎶 {t('uploadBgm')}</button>
+            ) : (
+                <div className="space-y-3 bg-white/5 p-3 rounded-xl border border-white/10">
+                    <WaveVisualizer buffer={bgmBuffer} color="#e94560" startTime={bgmStartTime} duration={bgmPlayDuration} />
+                    
+                    <div className="flex items-center justify-center gap-2 py-1">
+                        <button className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${bgmPreviewing ? 'bg-amber-500 text-white shadow-lg' : 'bg-white/15 text-white/80 hover:bg-white/25'}`} onClick={toggleBgmPreview}>
+                            {bgmPreviewing ? `⏹ ${t('bgmStop')}` : `▶ ${t('bgmPlay')}`}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-[10px] font-bold text-white/40 block mb-1">{t('bgmStartTime')}</label>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min="0" max={Math.max(0, (bgmBuffer?.duration || 0) - 1)} step="0.1" value={bgmStartTime} onChange={(e)=>{ setBgmStartTime(Number(e.target.value)); if(bgmPreviewing) stopBgmPreview(); }} className="flex-1 thumb-only-slider"/>
+                                <span className="text-[10px] font-mono text-white/60 w-8">{bgmStartTime.toFixed(1)}s</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-white/40 block mb-1">{t('bgmDuration')}</label>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min="1" max={Math.min(60, (bgmBuffer?.duration || 0) - bgmStartTime)} step="0.5" value={bgmPlayDuration} onChange={(e)=>{ setBgmPlayDuration(Number(e.target.value)); if(bgmPreviewing) stopBgmPreview(); }} className="flex-1 thumb-only-slider"/>
+                                <span className="text-[10px] font-mono text-white/60 w-8">{bgmPlayDuration.toFixed(1)}s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold text-white/40 block mb-1">{t('bgmVolume')}: {Math.round(bgmVolume*100)}%</label>
+                        <input type="range" min="0" max="1" step="0.05" value={bgmVolume} onChange={(e)=>setBgmVolume(Number(e.target.value))} className="thumb-only-slider"/>
+                    </div>
+
+                    <button className="w-full py-1.5 rounded-lg text-[10px] font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors" onClick={removeBgm}>{t('removeBgm')}</button>
+                </div>
+            )}
+          </div>
+
           <div className="border-t border-white/10 pt-3 mt-3"><label className="text-xs font-medium text-white/60 mb-2 block">🖼️ {language==='ko'?'스티커 이미지 (최대 2장)':'Sticker Image (max 2)'}</label>
           <input ref={stickerInputRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{
             const file=e.target.files?.[0]; if(!file||stickers.length>=2)return;
