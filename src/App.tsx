@@ -41,35 +41,59 @@ const EASINGS: Record<AnimStyle,(t:number)=>number> = {
 };
 
 /* ─── Audio Helpers ─── */
-async function getAudioData(url: string): Promise<AudioBuffer> {
+async function getAudioData(url: string, audioCtx: AudioContext): Promise<AudioBuffer> {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
-    audioCtx.close();
-    return buffer;
+    return await audioCtx.decodeAudioData(arrayBuffer);
 }
 
-function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, color: string) {
+function drawWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer, color: string, startTime: number, duration: number, zoom: number) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const width = canvas.width;
     const height = canvas.height;
     const data = buffer.getChannelData(0);
-    const step = Math.ceil(data.length / width);
-    const amp = height / 2;
+    
+    // Zoom & Pan calculation
+    const totalSamples = data.length;
+    const samplesPerPixel = (totalSamples / width) / zoom;
+    const startSample = 0; // Fixed view for simplicity, or we can add pan
+
     ctx.clearRect(0, 0, width, height);
+    
+    // Draw background guide
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(0, height/2, width, 1);
+
+    const amp = height / 2;
     ctx.fillStyle = color;
+    
     for (let i = 0; i < width; i++) {
+        const sampleIdx = Math.floor(startSample + i * samplesPerPixel);
+        if (sampleIdx >= totalSamples) break;
+        
         let min = 1.0;
         let max = -1.0;
+        const step = Math.max(1, Math.floor(samplesPerPixel));
         for (let j = 0; j < step; j++) {
-            const datum = data[i * step + j];
+            const datum = data[sampleIdx + j];
             if (datum < min) min = datum;
             if (datum > max) max = datum;
         }
         ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
     }
+
+    // Highlight active range
+    const totalDur = buffer.duration;
+    const pixelsPerSec = width / (totalDur / zoom);
+    const rangeX = (startTime / totalDur) * (width * zoom);
+    const rangeW = (duration / totalDur) * (width * zoom);
+
+    ctx.fillStyle = 'rgba(233,69,96,0.2)';
+    ctx.fillRect(rangeX, 0, rangeW, height);
+    ctx.strokeStyle = '#e94560';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rangeX, 0, rangeW, height);
 }
 
 /* ─── Sound (WebAudio) ─── */
@@ -154,15 +178,15 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
     ctx.save();
     ctx.beginPath();
     ctx.rect(0,0,w,h);
-    ctx.clip(); // Clip everything to the canvas boundaries
+    ctx.clip(); 
     const mw=(cfg.bgMedia as HTMLImageElement).naturalWidth || (cfg.bgMedia as HTMLVideoElement).videoWidth || w; const mh=(cfg.bgMedia as HTMLImageElement).naturalHeight || (cfg.bgMedia as HTMLVideoElement).videoHeight || h; const fitScale=Math.min(w/mw,h/mh); const fitW=mw*fitScale; const fitH=mh*fitScale; const userScale=cfg.bgMediaScale/100; const finalW=fitW*userScale; const finalH=fitH*userScale; const cx=w*cfg.bgMediaX/100; const cy=h*cfg.bgMediaY/100; const dx=cx-finalW/2; const dy=cy-finalH/2; ctx.drawImage(cfg.bgMedia, dx,dy,finalW,finalH); 
     ctx.restore();
   }
   
   const waitMs = cfg.animEnabled ? cfg.waitBeforeAnim * 1000 : 0;
-  if(cfg.animEnabled && elapsedMs < waitMs) return; // Hidden during wait time if anim enabled
+  if(cfg.animEnabled && elapsedMs < waitMs) return; 
 
-  const actualElapsed = cfg.animEnabled ? Math.max(0, elapsedMs - waitMs) : 100000; // Force end state if no anim
+  const actualElapsed = cfg.animEnabled ? Math.max(0, elapsedMs - waitMs) : 100000; 
   const scaleX=w/cfg.previewW, scaleY=h/cfg.previewH, scale=Math.min(scaleX,scaleY);
   const baseFS=cfg.baseFontSize*scale; const digitW=baseFS*0.7, digitH=baseFS*1.35, digitGap=baseFS*0.06*(cfg.spacing/10), sepW=baseFS*0.35; const labelFS=baseFS*0.4*(cfg.labelScale/100); const labelGap=(cfg.labelGapPx-10)*scale; const suffixFS=baseFS*0.54; const metricGap=(15+cfg.spacing*3)*scale; const easingFn=EASINGS[cfg.animStyle];
   const metrics=[{label:cfg.labelDuration,value:cfg.durationStr,suffix:''},{label:cfg.labelDistance,value:cfg.distanceStr,suffix:cfg.unitKm},{label:cfg.labelPace,value:cfg.paceStr,suffix:cfg.unitPace}];
@@ -170,7 +194,6 @@ function drawScene(ctx:CanvasRenderingContext2D, w:number,h:number, elapsedMs:nu
   let totalW:number,totalH:number; if(isVert){ totalH=metrics.length*blockH+(metrics.length-1)*metricGap; totalW=Math.max(...widths);} else { totalW=widths.reduce((s,d)=>s+d,0)+(metrics.length-1)*metricGap; totalH=blockH; }
   let curX:number, curY:number; if(isVert){ curX=centerX; curY=centerY-totalH/2;} else { curX=centerX-totalW/2; curY=centerY-totalH/2; }
 
-  // Intro Effect Calculation (First 500ms of actual playback)
   const introDur = cfg.animEnabled ? 500 : 0;
   const introProg = introDur > 0 ? Math.min(actualElapsed / introDur, 1) : 1;
   let globalAlpha = 1;
@@ -330,30 +353,79 @@ function ClampedNumberInput({ value, min, max, step, onChange, className, title,
 }
 
 /* ─── Wave Visualizer Component ─── */
-function WaveVisualizer({ buffer, color, startTime, duration, onRangeChange }: { buffer: AudioBuffer | null, color: string, startTime: number, duration: number, onRangeChange?: (start: number, dur: number) => void }) {
+function WaveVisualizer({ buffer, color, startTime, duration, zoom, onRangeChange }: { buffer: AudioBuffer | null, color: string, startTime: number, duration: number, zoom: number, onRangeChange: (start: number, dur: number) => void }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const isDraggingRef = useRef<'start' | 'range' | 'none'>('none');
+    const lastXRef = useRef(0);
+
     useEffect(() => {
         if (canvasRef.current && buffer) {
-            drawWaveform(canvasRef.current, buffer, color);
+            drawWaveform(canvasRef.current, buffer, color, startTime, duration, zoom);
         }
-    }, [buffer, color]);
+    }, [buffer, color, startTime, duration, zoom]);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        const rect = containerRef.current!.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const totalDur = buffer!.duration;
+        const clickTime = x * (totalDur / zoom);
+        
+        const startX = (startTime / totalDur) * (rect.width * zoom);
+        const endX = ((startTime + duration) / totalDur) * (rect.width * zoom);
+        const clickX = e.clientX - rect.left;
+
+        if (Math.abs(clickX - startX) < 15) {
+            isDraggingRef.current = 'start';
+        } else if (clickX > startX && clickX < endX) {
+            isDraggingRef.current = 'range';
+        } else {
+            const newStart = Math.max(0, Math.min(totalDur - duration, clickTime - duration/2));
+            onRangeChange(newStart, duration);
+            isDraggingRef.current = 'range';
+        }
+        lastXRef.current = e.clientX;
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (isDraggingRef.current === 'none' || !buffer) return;
+        const rect = containerRef.current!.getBoundingClientRect();
+        const dx = (e.clientX - lastXRef.current) / (rect.width * zoom) * buffer.duration;
+        
+        if (isDraggingRef.current === 'start') {
+            const newStart = Math.max(0, Math.min(startTime + duration - 0.5, startTime + dx));
+            const newDur = duration - (newStart - startTime);
+            onRangeChange(newStart, Math.max(0.5, newDur));
+        } else if (isDraggingRef.current === 'range') {
+            const newStart = Math.max(0, Math.min(buffer.duration - duration, startTime + dx));
+            onRangeChange(newStart, duration);
+        }
+        lastXRef.current = e.clientX;
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        isDraggingRef.current = 'none';
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    };
 
     if (!buffer) return null;
 
-    const totalDur = buffer.duration;
-    const left = (startTime / totalDur) * 100;
-    const width = (duration / totalDur) * 100;
-
     return (
-        <div className="relative w-full h-16 bg-white/5 rounded-lg overflow-hidden group cursor-pointer border border-white/10">
-            <canvas ref={canvasRef} width={600} height={64} className="w-full h-full opacity-40" />
-            <div 
-                className="absolute top-0 h-full bg-[#e94560]/30 border-x-2 border-[#e94560] shadow-[0_0_15px_rgba(233,69,96,0.3)] transition-all pointer-events-none"
-                style={{ left: `${left}%`, width: `${width}%` }}
-            />
-            <div className="absolute inset-0 flex items-center justify-between px-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-[10px] font-mono text-white/50 bg-black/50 px-1 rounded">0s</span>
-                <span className="text-[10px] font-mono text-white/50 bg-black/50 px-1 rounded">{totalDur.toFixed(1)}s</span>
+        <div 
+            ref={containerRef}
+            className="relative w-full h-20 bg-black/40 rounded-xl overflow-hidden cursor-crosshair border border-white/10 select-none"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+        >
+            <div style={{ width: `${zoom * 100}%`, height: '100%', position: 'relative', transition: 'width 0.2s ease' }}>
+                <canvas ref={canvasRef} width={800} height={80} className="w-full h-full opacity-60" />
+            </div>
+            <div className="absolute top-0 left-0 p-1 pointer-events-none">
+                <span className="text-[9px] font-mono text-white/30 bg-black/40 px-1 rounded">
+                    Range: {startTime.toFixed(1)}s - {(startTime + duration).toFixed(1)}s
+                </span>
             </div>
         </div>
     );
@@ -390,9 +462,21 @@ export function App(){
   const [bgmStartTime, setBgmStartTime] = useState(0);
   const [bgmPlayDuration, setBgmPlayDuration] = useState(10);
   const [bgmPreviewing, setBgmPreviewing] = useState(false);
+  const [bgmZoom, setBgmZoom] = useState(1);
   const bgmInputRef = useRef<HTMLInputElement>(null);
   const bgmSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const bgmPreviewAudioCtxRef = useRef<AudioContext | null>(null);
+  const globalAudioCtxRef = useRef<AudioContext | null>(null);
+
+  const getAudioCtx = useCallback(() => {
+    if (!globalAudioCtxRef.current || globalAudioCtxRef.current.state === 'closed') {
+        globalAudioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (globalAudioCtxRef.current.state === 'suspended') {
+        globalAudioCtxRef.current.resume();
+    }
+    return globalAudioCtxRef.current;
+  }, []);
 
   const [aspectRatio,setAspectRatio]=useState('1:1'); const [customAR,setCustomAR]=useState<{w:number;h:number}|null>(null); const [greenScreen,setGreenScreen]=useState(false); const [isRecording,setIsRecording]=useState(false); const [videoUrl,setVideoUrl]=useState<string|null>(null); const [videoMimeType,setVideoMimeType]=useState<string|null>(null);
   const isSamsungBrowser = /SamsungBrowser/i.test(navigator.userAgent);
@@ -599,14 +683,14 @@ export function App(){
   const getExportDims=()=> customAR?customAR:ASPECT_RATIOS['1:1']; const getPreviewStyle=():React.CSSProperties=> customAR?{aspectRatio:`${customAR.w} / ${customAR.h}`} : {}; const getPreviewClass=()=> customAR?'':'aspect-square';
   
   const stopAllSounds=useCallback(()=>{ 
-    try{ if(activeAudioCtxRef.current&&activeAudioCtxRef.current.state!=='closed'){ activeAudioCtxRef.current.close(); } }catch{} 
-    activeAudioCtxRef.current=null; 
-    try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{} 
-    previewAudioCtxRef.current=null; 
     if(bgmSourceRef.current) {
         try { bgmSourceRef.current.stop(); } catch(e) {}
         bgmSourceRef.current = null;
     }
+    if(activeAudioCtxRef.current&&activeAudioCtxRef.current.state!=='closed'){ 
+        try { activeAudioCtxRef.current.close(); } catch {}
+    } 
+    activeAudioCtxRef.current=null; 
   },[]);
 
   const stopBgmPreview = useCallback(() => {
@@ -615,7 +699,7 @@ export function App(){
         bgmSourceRef.current = null;
     }
     if(bgmPreviewAudioCtxRef.current && bgmPreviewAudioCtxRef.current.state !== 'closed') {
-        bgmPreviewAudioCtxRef.current.close();
+        try { bgmPreviewAudioCtxRef.current.close(); } catch {}
         bgmPreviewAudioCtxRef.current = null;
     }
     setBgmPreviewing(false);
@@ -629,7 +713,7 @@ export function App(){
         const vid = bgVideoRef.current;
         vid.muted = videoMuted;
         vid.volume = videoVolume;
-        vid.play();
+        vid.play().catch(() => {});
         setVideoPaused(false);
     }
 
@@ -637,7 +721,7 @@ export function App(){
       setIsAnimating(true);
       const totalWaitMs = useWait ? waitBeforeAnim * 1000 : 0;
       
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = getAudioCtx();
       activeAudioCtxRef.current = audioCtx;
       
       if(soundEnabled){ 
@@ -648,12 +732,13 @@ export function App(){
 
       if(bgmBuffer) {
         setTimeout(() => {
-            const source = audioCtx.createBufferSource();
+            if (!activeAudioCtxRef.current || activeAudioCtxRef.current.state === 'closed') return;
+            const source = activeAudioCtxRef.current.createBufferSource();
             source.buffer = bgmBuffer;
-            const gain = audioCtx.createGain();
+            const gain = activeAudioCtxRef.current.createGain();
             gain.gain.value = bgmVolume;
             source.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(activeAudioCtxRef.current.destination);
             source.start(0, bgmStartTime, bgmPlayDuration + extraHoldTime + 1);
             bgmSourceRef.current = source;
         }, totalWaitMs);
@@ -685,12 +770,8 @@ export function App(){
   };
   
   const previewSoundFn=(type:string)=>{
-    try{ if(previewAudioCtxRef.current&&previewAudioCtxRef.current.state!=='closed'){ previewAudioCtxRef.current.close(); } }catch{}
-    const temp=new (window.AudioContext|| (window as any).webkitAudioContext)();
-    if(temp.state==='suspended') temp.resume().catch(()=>{});
+    const temp = getAudioCtx();
     playSound(type,soundVolume,1500,'machine',temp);
-    previewAudioCtxRef.current=temp;
-    setTimeout(()=>{ try{ if(temp.state!=='closed') temp.close(); }catch{} },1500);
   };
 
   const handleWheel=useCallback((e:React.WheelEvent)=>{ if(e.ctrlKey||!selectedElement)return; e.preventDefault(); markResizing(); const delta=e.deltaY>0?-1:1; if(selectedElement==='record'){ setMetricFontSize(p=>Math.max(30,Math.min(300,p+delta*5))); } else if(selectedElement==='bg'){ setBgMediaScale(p=>Math.max(10,Math.min(1000,p+delta*5))); } else if(selectedElement.startsWith('text-')){ const id=selectedElement.replace('text-',''); setTextOverlays(p=>p.map(o=>o.id===id?{...o,fontSize:Math.max(6,Math.min(200,o.fontSize+delta*2))}:o)); } else if(selectedElement.startsWith('sticker-')){ const id=selectedElement.replace('sticker-',''); setStickers(p=>p.map(s=>s.id===id?{...s,size:Math.max(20,Math.min(500,s.size+delta*5))}:o)); } else if(selectedElement.startsWith('emoji-')){ const id=selectedElement.replace('emoji-',''); setEmojiOverlays(p=>p.map(o=>o.id===id?{...o,size:Math.max(8,Math.min(200,o.size+delta*2))}:o)); } },[selectedElement,markResizing]);
@@ -721,7 +802,7 @@ export function App(){
     } else {
       setBgMediaType('image'); setBgMediaUrl(url);
       const img=new Image(); img.src=url; bgImageRef.current=img; bgVideoRef.current=null;
-      img.addEventListener('load',()=>{ const iw=img.naturalWidth, ih=img.naturalHeight; if(iw&&ih){ const short=Math.min(iw,ih); const sc=1080/short; setCustomAR({w:Math.round(iw*sc),h:Math.round(ih*sc)}); setAspectRatio('custom'); }});
+      img.addEventListener('load',()=>{ const iw=img.naturalWidth, ih=img.naturalHeight; if(iw&&ih){ const short=Math.min(iw,ih); const sc=1080/short; setCustomAR({w:Math.round(iw*sc),h:Math.round(iw*sc)}); setAspectRatio('custom'); }});
     }
   };
 
@@ -804,7 +885,6 @@ export function App(){
             gain.gain.value = videoVolume;
             vidNode.connect(gain);
             gain.connect(audioDest);
-            gain.connect(audioCtx.destination);
         }
 
         if (audioDest.stream.getAudioTracks().length > 0) {
@@ -835,7 +915,7 @@ export function App(){
         const img=new Image(); img.crossOrigin='anonymous'; img.src=bgMediaUrl; 
         await new Promise<void>(res=>{ img.onload=()=>res(); img.onerror=()=>res(); }); bgMedia=img; 
     } else if(bgMediaUrl&&bgMediaType==='video'&&bgVideoRef.current){ 
-        bgVideoRef.current.play(); bgMedia=bgVideoRef.current; 
+        bgVideoRef.current.play().catch(() => {}); bgMedia=bgVideoRef.current; 
     }
     
     setIsRecording(true); setVideoUrl(null); recorder.start(); setShowValues(!animEnabled); setIsAnimating(animEnabled); setAnimKey(k=>k+1);
@@ -845,24 +925,23 @@ export function App(){
       setTimeout(()=>setShowValues(true),ANIM_DELAY + totalWaitMs);
       if(soundEnabled && audioCtx && audioDest){
         setTimeout(()=>{
-          playSound(soundType, soundVolume, animDuration - ANIM_OVERHEAD, animStyle, audioCtx!, [audioCtx!.destination, audioDest!]);
+          playSound(soundType, soundVolume, animDuration - ANIM_OVERHEAD, animStyle, audioCtx!, [audioDest!]);
         },ANIM_DELAY + totalWaitMs);
       }
       if(bgmBuffer && audioCtx && audioDest) {
         setTimeout(() => {
-            const source = audioCtx!.createBufferSource();
+            if (!audioCtx || audioCtx.state === 'closed') return;
+            const source = audioCtx.createBufferSource();
             source.buffer = bgmBuffer;
-            const gain = audioCtx!.createGain();
+            const gain = audioCtx.createGain();
             gain.gain.value = bgmVolume;
             source.connect(gain);
             gain.connect(audioDest!);
-            gain.connect(audioCtx!.destination);
             source.start(0, bgmStartTime, (animDuration + extraHoldTime * 1000) / 1000 + 2);
         }, totalWaitMs);
       }
       setTimeout(()=>setIsAnimating(false),totalWaitMs + animDuration);
     } else {
-        // No animation, but maybe BGM?
         if(bgmBuffer && audioCtx && audioDest) {
             const source = audioCtx.createBufferSource();
             source.buffer = bgmBuffer;
@@ -870,8 +949,7 @@ export function App(){
             gain.gain.value = bgmVolume;
             source.connect(gain);
             gain.connect(audioDest);
-            gain.connect(audioCtx.destination);
-            source.start(0, bgmStartTime, 5); // 3-5s for static
+            source.start(0, bgmStartTime, 5); 
         }
     }
 
@@ -903,11 +981,13 @@ export function App(){
     if (!file) return;
     try {
         const url = URL.createObjectURL(file);
-        const buffer = await getAudioData(url);
+        const ctx = getAudioCtx();
+        const buffer = await getAudioData(url, ctx);
         setBgmUrl(url);
         setBgmBuffer(buffer);
         setBgmStartTime(0);
         setBgmPlayDuration(Math.min(buffer.duration, 15));
+        setBgmZoom(1);
     } catch(err) { console.error('BGM load error:', err); }
     if(bgmInputRef.current) bgmInputRef.current.value = '';
   };
@@ -916,7 +996,7 @@ export function App(){
     if(bgmPreviewing) {
         stopBgmPreview();
     } else if(bgmBuffer) {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioCtx = getAudioCtx();
         bgmPreviewAudioCtxRef.current = audioCtx;
         const source = audioCtx.createBufferSource();
         source.buffer = bgmBuffer;
@@ -959,7 +1039,7 @@ export function App(){
   const handleVideoToggle = () => {
     if(bgVideoRef.current) {
         if(bgVideoRef.current.paused) {
-            bgVideoRef.current.play();
+            bgVideoRef.current.play().catch(() => {});
             setVideoPaused(false);
         } else {
             bgVideoRef.current.pause();
@@ -1124,28 +1204,15 @@ export function App(){
                 <button className="w-full py-2.5 rounded-xl font-semibold text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 transition active:scale-95" onClick={()=>bgmInputRef.current?.click()}>🎶 {t('uploadBgm')}</button>
             ) : (
                 <div className="space-y-3 bg-white/5 p-3 rounded-xl border border-white/10">
-                    <WaveVisualizer buffer={bgmBuffer} color="#e94560" startTime={bgmStartTime} duration={bgmPlayDuration} />
+                    <WaveVisualizer buffer={bgmBuffer} color="#e94560" startTime={bgmStartTime} duration={bgmPlayDuration} zoom={bgmZoom} onRangeChange={(s, d) => { setBgmStartTime(s); setBgmPlayDuration(d); if(bgmPreviewing) stopBgmPreview(); }} />
                     
-                    <div className="flex items-center justify-center gap-2 py-1">
-                        <button className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${bgmPreviewing ? 'bg-amber-500 text-white shadow-lg' : 'bg-white/15 text-white/80 hover:bg-white/25'}`} onClick={toggleBgmPreview}>
+                    <div className="flex items-center justify-between gap-2 py-1">
+                        <button className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all ${bgmPreviewing ? 'bg-amber-500 text-white shadow-lg' : 'bg-white/15 text-white/80 hover:bg-white/25'}`} onClick={toggleBgmPreview}>
                             {bgmPreviewing ? `⏹ ${t('bgmStop')}` : `▶ ${t('bgmPlay')}`}
                         </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-[10px] font-bold text-white/40 block mb-1">{t('bgmStartTime')}</label>
-                            <div className="flex items-center gap-2">
-                                <input type="range" min="0" max={Math.max(0, (bgmBuffer?.duration || 0) - 1)} step="0.1" value={bgmStartTime} onChange={(e)=>{ setBgmStartTime(Number(e.target.value)); if(bgmPreviewing) stopBgmPreview(); }} className="flex-1 thumb-only-slider"/>
-                                <span className="text-[10px] font-mono text-white/60 w-8">{bgmStartTime.toFixed(1)}s</span>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-white/40 block mb-1">{t('bgmDuration')}</label>
-                            <div className="flex items-center gap-2">
-                                <input type="range" min="1" max={Math.min(60, (bgmBuffer?.duration || 0) - bgmStartTime)} step="0.5" value={bgmPlayDuration} onChange={(e)=>{ setBgmPlayDuration(Number(e.target.value)); if(bgmPreviewing) stopBgmPreview(); }} className="flex-1 thumb-only-slider"/>
-                                <span className="text-[10px] font-mono text-white/60 w-8">{bgmPlayDuration.toFixed(1)}s</span>
-                            </div>
+                        <div className="flex items-center gap-1">
+                            <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition" onClick={() => setBgmZoom(p => Math.min(10, p + 1))} title={t('zoomIn')}>+</button>
+                            <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition" onClick={() => setBgmZoom(p => Math.max(1, p - 1))} title={t('zoomOut')}>-</button>
                         </div>
                     </div>
 
